@@ -524,10 +524,29 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
       appBar: AppBar(
         title: Text(project.name),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(80),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: StepIndicator(currentStep: step),
+          preferredSize: const Size.fromHeight(84),
+          child: Column(
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: StepIndicator(currentStep: step),
+              ),
+              // Spectrum accent line below the step indicator
+              Container(
+                height: 2,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFF7B2FBE),
+                      Color(0xFF00BCD4),
+                      Color(0xFF4CAF50),
+                      Color(0xFFFF9800),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -554,34 +573,55 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
   Widget _buildBottomBar(WorkflowStep step) {
     final isFirst = step.index == 0;
     final isLast = step.index == WorkflowStep.values.length - 1;
+    final cs = Theme.of(context).colorScheme;
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: [
-            if (!isFirst)
-              OutlinedButton.icon(
-                onPressed: _prevStep,
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Back'),
-              ),
-            const Spacer(),
-            if (!isLast)
-              FilledButton.icon(
-                onPressed: step == WorkflowStep.references
-                    ? _analyseAndProceed
-                    : _nextStep,
-                icon: Icon(
-                  step == WorkflowStep.references
-                      ? Icons.auto_graph
-                      : Icons.arrow_forward,
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F1B2D),
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.07)),
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: Row(
+            children: [
+              if (!isFirst)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _prevStep,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: cs.onSurface.withValues(alpha: 0.7),
+                      side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.15)),
+                    ),
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                        size: 16),
+                    label: const Text('Back'),
+                  ),
                 ),
-                label: Text(
-                  step == WorkflowStep.references ? 'Analyse' : 'Next',
+              if (!isFirst && !isLast) const SizedBox(width: 12),
+              if (!isLast)
+                Expanded(
+                  flex: isFirst ? 1 : 2,
+                  child: FilledButton.icon(
+                    onPressed: step == WorkflowStep.references
+                        ? _analyseAndProceed
+                        : _nextStep,
+                    icon: Icon(
+                      step == WorkflowStep.references
+                          ? Icons.auto_graph_rounded
+                          : Icons.arrow_forward_ios_rounded,
+                      size: 16,
+                    ),
+                    label: Text(step == WorkflowStep.references
+                        ? 'Analyse'
+                        : 'Continue'),
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
