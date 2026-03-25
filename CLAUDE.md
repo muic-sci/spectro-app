@@ -139,6 +139,47 @@ flutter run -d chrome        # web (no camera)
 ```
 A **real phone** is required for full camera functionality (focus lock, spectrum capture).
 
+## Git Commit Convention
+All commits must follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>[optional scope]: <short description>
+
+[optional body — bullet points for multi-change commits]
+```
+
+**Types used in this project:**
+
+| Type | When to use |
+|------|-------------|
+| `feat` | New feature or user-visible behaviour |
+| `fix` | Bug fix |
+| `refactor` | Code restructure with no behaviour change |
+| `perf` | Performance improvement |
+| `docs` | CLAUDE.md or other documentation only |
+| `chore` | Dependencies, build config, project scaffolding |
+| `test` | Adding or updating tests |
+| `style` | Formatting, no logic change |
+
+**Rules:**
+- Subject line ≤ 72 characters, lowercase after the colon, no trailing period
+- Use body bullet points when a commit touches more than one concern
+- `flutter analyze` must pass with zero issues before every commit
+- Update `CLAUDE.md` in the same commit when domain knowledge, the data model, workflow steps, or architecture changes
+
+**Examples:**
+```
+feat(calibration): auto-detect fluorescent lamp peaks on capture
+
+fix: prevent divide-by-zero in absorbance when blank intensity is zero
+
+refactor(workflow): extract references step into its own widget
+
+chore: add image_picker dependency for web file-upload support
+
+docs: update CLAUDE.md with saturation warning and gamma correction
+```
+
 ## Development Notes
 - Hive adapters: run `dart run build_runner build` if models change and you add `@HiveType` annotations (currently models are plain Dart, not Hive-annotated — persistence uses manual serialization in `ProjectRepository`)
 - `flutter analyze` must pass with zero issues before committing
