@@ -1,0 +1,26 @@
+# Git
+.git
+.gitignore
+
+# Build output (built inside Docker)
+build/
+
+# Reference materials — large PDFs/spreadsheets not needed for the web build
+materials/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Dart/Flutter tooling
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+# Test coverage
+coverage/
