@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:spectro_app/core/utils/image_processing.dart';
@@ -59,7 +61,6 @@ class WorkflowScreen extends ConsumerStatefulWidget {
 }
 
 class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
-  // Local state for data not yet persisted to the project.
   CalibrationCurve? _calibrationCurve;
 
   ProjectNotifier get _notifier =>
@@ -92,21 +93,48 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
     }
   }
 
-  // ── Camera stub ─────────────────────────────────────────────────────────
-  // In a real app this would launch the camera screen and return image bytes.
+  // ── Image acquisition ────────────────────────────────────────────────────
 
+  /// On web: opens a file-upload dialog (ImageSource.gallery).
+  /// On mobile: opens the device camera (ImageSource.camera).
+  /// Returns raw image bytes, or null if the user cancelled.
   Future<Uint8List?> _openCamera() async {
-    // TODO: integrate with actual camera screen.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Camera integration pending')),
+    final source = kIsWeb ? ImageSource.gallery : ImageSource.camera;
+    final file = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 100, // no lossy recompression — preserve pixel values
     );
-    return null;
+    return file?.readAsBytes();
   }
 
-  // ── Step: Camera Setup ────────────────────────────────────────────────────
+  // ── Saturation warning ───────────────────────────────────────────────────
 
-  Widget _buildCameraSetup() {
-    return Padding(
+  /// Checks for saturated pixels in [roi] and shows a persistent warning
+  /// SnackBar if any are found. Should be called immediately after every
+  /// image capture, before the bytes are processed.
+  void _warnIfSaturated(Uint8List bytes, Rect roi) {
+    final result = checkSaturation(bytes, roi);
+    if (!result.isSaturated) return;
+    final pct = (result.fraction * 100).toStringAsFixed(1);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.orange.shade800,
+        duration: const Duration(seconds: 6),
+        content: Text(
+          '\u26a0\ufe0f Saturation warning: $pct% of ROI pixels are clipped '
+          '(any channel \u2265 ${result.threshold}). '
+          'Reduce light intensity or add a neutral-density filter.',
+        ),
+      ),
+    );
+  }
+
+  // ── Step 1: Setup (Camera + ROI) ─────────────────────────────────────────
+
+  Widget _buildSetup() {
+    final project = _project;
+
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -116,33 +144,64 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
             content:
                 'Position your phone so the camera looks through the '
                 'spectrophotometer slit. Make sure the light source is '
-                'aligned and the spectrum is centred in the preview.',
+                'aligned and the spectrum is centred in the preview. '
+                'Tap the preview to lock focus and exposure.',
             icon: Icons.camera_alt_outlined,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: () async {
               final bytes = await _openCamera();
-              if (bytes != null) {
-                _nextStep();
-              }
+              if (bytes != null) _nextStep();
             },
-            icon: const Icon(Icons.camera),
-            label: const Text('Open Camera'),
+            icon: Icon(kIsWeb ? Icons.upload_file : Icons.camera),
+            label: Text(kIsWeb ? 'Upload Test Photo' : 'Open Camera'),
           ),
-          const SizedBox(height: 12),
           OutlinedButton(
             onPressed: _nextStep,
-            child: const Text('Skip (camera already set up)'),
+            child: const Text('Skip (already set up)'),
+          ),
+          const SizedBox(height: 24),
+          const Divider(),
+          const SizedBox(height: 16),
+          const InfoCard(
+            title: 'Region of Interest',
+            content:
+                'Select the strip of pixels containing the spectrum. '
+                'This region is reused for every capture in this experiment.',
+            icon: Icons.crop,
+          ),
+          const SizedBox(height: 12),
+          if (project?.roi != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  'ROI set: '
+                  '${project!.roi!.width.toStringAsFixed(0)} × '
+                  '${project.roi!.height.toStringAsFixed(0)} px',
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () async {
+              // TODO: navigate to RoiSelectionScreen.
+              _notifier.update(
+                (p) => p.copyWith(roi: const Rect.fromLTWH(0, 100, 640, 100)),
+              );
+            },
+            icon: const Icon(Icons.crop_free),
+            label: Text(project?.roi != null ? 'Adjust ROI' : 'Select ROI'),
           ),
         ],
       ),
     );
   }
 
-  // ── Step: Wavelength Calibration ──────────────────────────────────────────
+  // ── Step 2: Calibration ───────────────────────────────────────────────────
 
-  Widget _buildWavelengthCalibration() {
+  Widget _buildCalibration() {
     final project = _project;
 
     return Padding(
@@ -164,7 +223,7 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Text(
-                  'Calibration available: '
+                  'Calibration: '
                   'R\u00B2 = ${project!.calibration!.rSquared.toStringAsFixed(6)}',
                 ),
               ),
@@ -176,8 +235,8 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
               final bytes = await _openCamera();
               if (bytes == null) return;
 
-              final roi = project?.roi ??
-                  const Rect.fromLTWH(0, 0, 640, 480);
+              final roi = project?.roi ?? const Rect.fromLTWH(0, 0, 640, 480);
+              _warnIfSaturated(bytes, roi);
               final profile = extractIntensityProfile(bytes, roi);
 
               if (!mounted) return;
@@ -192,8 +251,7 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
               final calibration = await Navigator.push<Calibration>(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                      PeakIdentificationScreen(profile: profile),
+                  builder: (_) => PeakIdentificationScreen(profile: profile),
                 ),
               );
 
@@ -201,8 +259,8 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
                 final accepted = await Navigator.push<bool>(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => CalibrationResultScreen(
-                        calibration: calibration),
+                    builder: (_) =>
+                        CalibrationResultScreen(calibration: calibration),
                   ),
                 );
 
@@ -213,8 +271,8 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
                 }
               }
             },
-            icon: const Icon(Icons.camera),
-            label: const Text('Capture Fluorescent Lamp'),
+            icon: Icon(kIsWeb ? Icons.upload_file : Icons.camera),
+            label: Text(kIsWeb ? 'Upload Lamp Photo' : 'Capture Fluorescent Lamp'),
           ),
           if (project?.calibration != null) ...[
             const SizedBox(height: 12),
@@ -228,154 +286,123 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
     );
   }
 
-  // ── Step: ROI Selection ───────────────────────────────────────────────────
+  // ── Step 3: References (Blank + Standards) ────────────────────────────────
 
-  Widget _buildRoiSelection() {
+  Widget _buildReferences() {
     final project = _project;
+    final roi = project?.roi ?? const Rect.fromLTWH(0, 100, 640, 100);
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
+    return DefaultTabController(
+      length: 2,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const InfoCard(
-            title: 'Region of Interest',
-            content:
-                'Select the region of the image that contains the '
-                'spectrum. This ROI will be used for all subsequent '
-                'measurements.',
-            icon: Icons.crop,
+          const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.water_drop_outlined), text: 'Blank'),
+              Tab(icon: Icon(Icons.list_alt), text: 'Standards'),
+            ],
           ),
-          const SizedBox(height: 24),
-          if (project?.roi != null)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  'ROI set: '
-                  '${project!.roi!.width.toStringAsFixed(0)} x '
-                  '${project.roi!.height.toStringAsFixed(0)}',
+          Expanded(
+            child: TabBarView(
+              children: [
+                // Tab 1: Blank
+                BlankCaptureScreen(
+                  roi: roi,
+                  blankImage: project?.blankImage,
+                  onCapture: () async {
+                    final bytes = await _openCamera();
+                    if (bytes == null) return null;
+                    _warnIfSaturated(bytes, roi);
+                    final profile = extractIntensityProfile(bytes, roi);
+                    final image = SpectralImage(
+                      filePath: 'blank_capture',
+                      intensityProfile: IntensityProfile(points: profile),
+                    );
+                    _notifier.update((p) => p.copyWith(blankImage: image));
+                    return image;
+                  },
                 ),
-              ),
+                // Tab 2: Standards
+                StandardCaptureScreen(
+                  standards: project?.standards ?? [],
+                  onCapture: (concentration, unit) async {
+                    final bytes = await _openCamera();
+                    if (bytes == null) return null;
+                    _warnIfSaturated(bytes, roi);
+                    final profile = extractIntensityProfile(bytes, roi);
+                    final image = SpectralImage(
+                      filePath: 'standard_${concentration}_$unit',
+                      intensityProfile: IntensityProfile(points: profile),
+                    );
+                    final measurement = StandardMeasurement(
+                      concentration: concentration,
+                      unit: unit,
+                      image: image,
+                    );
+                    _notifier.update((p) => p.copyWith(
+                          standards: [...p.standards, measurement],
+                        ));
+                    return measurement;
+                  },
+                  onRemove: (index) {
+                    _notifier.update((p) {
+                      final updated =
+                          List<StandardMeasurement>.from(p.standards)
+                            ..removeAt(index);
+                      return p.copyWith(standards: updated);
+                    });
+                  },
+                ),
+              ],
             ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: () async {
-              // TODO: navigate to ROI selection screen.
-              _notifier.update(
-                (p) => p.copyWith(roi: const Rect.fromLTWH(0, 100, 640, 100)),
-              );
-              _nextStep();
-            },
-            icon: const Icon(Icons.crop_free),
-            label: const Text('Select ROI'),
           ),
-          if (project?.roi != null) ...[
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: _nextStep,
-              child: const Text('Keep Current ROI'),
-            ),
-          ],
         ],
       ),
     );
   }
 
-  // ── Step: Blank Capture ───────────────────────────────────────────────────
-
-  Widget _buildBlankCapture() {
-    final project = _project;
-    final roi = project?.roi ?? const Rect.fromLTWH(0, 100, 640, 100);
-
-    return BlankCaptureScreen(
-      roi: roi,
-      blankImage: project?.blankImage,
-      onCapture: () async {
-        final bytes = await _openCamera();
-        if (bytes == null) return null;
-
-        final profile = extractIntensityProfile(bytes, roi);
-        final image = SpectralImage(
-          filePath: 'blank_capture',
-          intensityProfile: IntensityProfile(points: profile),
-        );
-
-        _notifier.update((p) => p.copyWith(blankImage: image));
-        return image;
-      },
-    );
-  }
-
-  // ── Step: Standard Captures ───────────────────────────────────────────────
-
-  Widget _buildStandardCaptures() {
-    final project = _project;
-    final roi = project?.roi ?? const Rect.fromLTWH(0, 100, 640, 100);
-    final standards = project?.standards ?? [];
-
-    return StandardCaptureScreen(
-      standards: standards,
-      onCapture: (concentration, unit) async {
-        final bytes = await _openCamera();
-        if (bytes == null) return null;
-
-        final profile = extractIntensityProfile(bytes, roi);
-        final image = SpectralImage(
-          filePath: 'standard_${concentration}_$unit',
-          intensityProfile: IntensityProfile(points: profile),
-        );
-
-        final measurement = StandardMeasurement(
-          concentration: concentration,
-          unit: unit,
-          image: image,
-        );
-
-        _notifier.update((p) => p.copyWith(
-              standards: [...p.standards, measurement],
-            ));
-        return measurement;
-      },
-      onRemove: (index) {
-        _notifier.update((p) {
-          final updated = List<StandardMeasurement>.from(p.standards)
-            ..removeAt(index);
-          return p.copyWith(standards: updated);
-        });
-      },
-    );
-  }
-
-  // ── Step: Absorbance Analysis ─────────────────────────────────────────────
-
-  Widget _buildAbsorbanceAnalysis() {
+  /// Validates references are complete, then pushes the analysis screen.
+  /// On accept the calibration curve is stored and the step advances.
+  Future<void> _analyseAndProceed() async {
     final project = _project;
     if (project == null ||
         project.calibration == null ||
         project.blankImage?.intensityProfile == null ||
-        project.standards.isEmpty) {
-      return const Center(
-        child: Text('Missing data. Please complete previous steps.'),
+        project.standards.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Capture a blank and at least 2 standards before continuing.',
+          ),
+        ),
       );
+      return;
     }
 
-    return AbsorbanceSpectraScreen(
-      calibration: project.calibration!,
-      blankProfile: project.blankImage!.intensityProfile!,
-      standards: project.standards,
-      onCalibrationCurveReady: (curve, lambdaMax, updatedStandards) {
-        _calibrationCurve = curve;
-        _notifier.update(
-            (p) => p.copyWith(standards: updatedStandards));
-        _nextStep();
-      },
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Absorbance Analysis')),
+          body: AbsorbanceSpectraScreen(
+            calibration: project.calibration!,
+            blankProfile: project.blankImage!.intensityProfile!,
+            standards: project.standards,
+            onCalibrationCurveReady: (curve, lambdaMax, updatedStandards) {
+              _calibrationCurve = curve;
+              _notifier.update((p) => p.copyWith(standards: updatedStandards));
+              _nextStep();
+              Navigator.pop(context);
+            },
+          ),
+        ),
+      ),
     );
   }
 
-  // ── Step: Unknown Capture ─────────────────────────────────────────────────
+  // ── Step 4: Unknown ───────────────────────────────────────────────────────
 
-  Widget _buildUnknownCapture() {
+  Widget _buildUnknown() {
     final project = _project;
     final roi = project?.roi ?? const Rect.fromLTWH(0, 100, 640, 100);
 
@@ -388,8 +415,8 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
             title: 'Unknown Sample',
             content:
                 'Capture the spectrum of your unknown sample. Its '
-                'absorbance at \u03BB_max will be read from the '
-                'Beer-Lambert calibration curve to determine the '
+                'absorbance at \u03BB\u2098\u2090\u02E3 will be read from '
+                'the Beer-Lambert calibration curve to determine its '
                 'concentration.',
             icon: Icons.science,
           ),
@@ -399,6 +426,7 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
               final bytes = await _openCamera();
               if (bytes == null) return;
 
+              _warnIfSaturated(bytes, roi);
               final profile = extractIntensityProfile(bytes, roi);
               final image = SpectralImage(
                 filePath: 'unknown_capture',
@@ -456,15 +484,15 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
                   ));
               _nextStep();
             },
-            icon: const Icon(Icons.camera_alt),
-            label: const Text('Capture Unknown Sample'),
+            icon: Icon(kIsWeb ? Icons.upload_file : Icons.camera_alt),
+            label: Text(kIsWeb ? 'Upload Unknown Photo' : 'Capture Unknown Sample'),
           ),
         ],
       ),
     );
   }
 
-  // ── Step: Results ─────────────────────────────────────────────────────────
+  // ── Step 5: Results ───────────────────────────────────────────────────────
 
   Widget _buildResults() {
     final project = _project;
@@ -510,20 +538,14 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
 
   Widget _buildStepContent(WorkflowStep step) {
     switch (step) {
-      case WorkflowStep.cameraSetup:
-        return _buildCameraSetup();
-      case WorkflowStep.wavelengthCalibration:
-        return _buildWavelengthCalibration();
-      case WorkflowStep.roiSelection:
-        return _buildRoiSelection();
-      case WorkflowStep.blankCapture:
-        return _buildBlankCapture();
-      case WorkflowStep.standardCaptures:
-        return _buildStandardCaptures();
-      case WorkflowStep.absorbanceAnalysis:
-        return _buildAbsorbanceAnalysis();
-      case WorkflowStep.unknownCapture:
-        return _buildUnknownCapture();
+      case WorkflowStep.setup:
+        return _buildSetup();
+      case WorkflowStep.calibration:
+        return _buildCalibration();
+      case WorkflowStep.references:
+        return _buildReferences();
+      case WorkflowStep.unknown:
+        return _buildUnknown();
       case WorkflowStep.results:
         return _buildResults();
     }
@@ -547,9 +569,17 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
             const Spacer(),
             if (!isLast)
               FilledButton.icon(
-                onPressed: _nextStep,
-                icon: const Icon(Icons.arrow_forward),
-                label: const Text('Next'),
+                onPressed: step == WorkflowStep.references
+                    ? _analyseAndProceed
+                    : _nextStep,
+                icon: Icon(
+                  step == WorkflowStep.references
+                      ? Icons.auto_graph
+                      : Icons.arrow_forward,
+                ),
+                label: Text(
+                  step == WorkflowStep.references ? 'Analyse' : 'Next',
+                ),
               ),
           ],
         ),

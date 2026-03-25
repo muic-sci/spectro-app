@@ -1,46 +1,152 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
-
-  <!-- iOS meta tags & icons -->
+  <meta name="description" content="Spectro App — Lego Spectrophotometer">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="spectro_app">
+  <meta name="apple-mobile-web-app-title" content="Spectro App">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>spectro_app</title>
+  <title>Spectro App</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ── Page ─────────────────────────────────────────────────────────── */
+    html, body { height: 100%; }
+
+    body {
+      background: radial-gradient(ellipse at center, #1b2a4a 0%, #0d1117 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 14px;
+      font-family: system-ui, sans-serif;
+    }
+
+    .device-label {
+      color: rgba(255, 255, 255, 0.35);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      user-select: none;
+    }
+
+    /* ── Phone shell (bezel) ──────────────────────────────────────────── */
+    .phone-shell {
+      position: relative;
+      width: 393px;          /* iPhone 15 Pro width  */
+      background: #111;
+      border-radius: 55px;
+      /* layered box-shadow: inner screen edge, body rim, outer highlight, drop */
+      box-shadow:
+        inset 0 0 0 1px #555,
+        0 0 0 2px #222,
+        0 0 0 4px #555,
+        0 0 0 6px #222,
+        0 60px 120px rgba(0, 0, 0, 0.9);
+    }
+
+    /* Power button — right side */
+    .phone-shell::before {
+      content: '';
+      position: absolute;
+      right: -8px;
+      top: 165px;
+      width: 4px;
+      height: 72px;
+      background: #3a3a3a;
+      border-radius: 0 3px 3px 0;
+    }
+
+    /* Volume up + down — left side */
+    .phone-shell::after {
+      content: '';
+      position: absolute;
+      left: -8px;
+      top: 120px;
+      width: 4px;
+      height: 48px;
+      background: #3a3a3a;
+      border-radius: 3px 0 0 3px;
+      box-shadow: 0 68px 0 #3a3a3a;   /* volume down */
+    }
+
+    /* ── Screen area (clips Flutter to rounded rect) ─────────────────── */
+    .phone-screen {
+      position: relative;
+      margin: 6px;
+      border-radius: 50px;
+      overflow: hidden;
+      background: #000;
+    }
+
+    /* Dynamic island — overlaid on top of Flutter */
+    .dynamic-island {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 34px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    /* ── Flutter host — engine renders into this element ─────────────── */
+    #flutter-host {
+      width: 381px;    /* 393 - 6px margin each side */
+      height: 852px;   /* iPhone 15 Pro logical height */
+      display: block;
+      position: relative;
+    }
+
+    /* ── Responsive scaling ───────────────────────────────────────────── */
+    /* Scale down the whole phone shell if the viewport is too short      */
+    @media (max-height: 980px) {
+      .phone-shell { transform: scale(0.90); transform-origin: center top; }
+    }
+    @media (max-height: 880px) {
+      .phone-shell { transform: scale(0.80); transform-origin: center top; }
+    }
+    @media (max-height: 780px) {
+      .phone-shell { transform: scale(0.70); transform-origin: center top; }
+    }
+    @media (max-height: 680px) {
+      .phone-shell { transform: scale(0.60); transform-origin: center top; }
+    }
+
+    /* On a real phone browser: drop the frame, go full-screen */
+    @media (max-width: 440px) {
+      body { background: none; flex-direction: column; justify-content: flex-start; }
+      .device-label, .phone-shell { display: none; }
+      #flutter-fullscreen {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
+  <span class="device-label">Spectro App &nbsp;·&nbsp; Mobile Preview</span>
 
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <div class="phone-shell">
+    <div class="phone-screen">
+      <div class="dynamic-island"></div>
+      <!-- Flutter renders into this div via the custom bootstrap below -->
+      <div id="flutter-host"></div>
+    </div>
+  </div>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

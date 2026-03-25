@@ -10,12 +10,9 @@ class StepIndicator extends StatelessWidget {
   final WorkflowStep currentStep;
 
   static const List<String> _shortLabels = [
-    'Camera',
+    'Setup',
     'Calibrate',
-    'ROI',
-    'Blank',
-    'Standards',
-    'Analyse',
+    'References',
     'Unknown',
     'Results',
   ];

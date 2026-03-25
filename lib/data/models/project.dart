@@ -142,14 +142,11 @@ class UnknownResult {
 // ── WorkflowStep ─────────────────────────────────────────────────────────────
 
 enum WorkflowStep {
-  cameraSetup,
-  wavelengthCalibration,
-  roiSelection,
-  blankCapture,
-  standardCaptures,
-  absorbanceAnalysis,
-  unknownCapture,
-  results,
+  setup,        // camera lock + ROI selection
+  calibration,  // wavelength calibration
+  references,   // blank + standards capture
+  unknown,      // capture unknown sample
+  results,      // analysis, results, export
 }
 
 // ── Project ──────────────────────────────────────────────────────────────────
@@ -172,7 +169,7 @@ class Project {
     required this.name,
     DateTime? createdAt,
     DateTime? updatedAt,
-    this.currentStep = WorkflowStep.cameraSetup,
+    this.currentStep = WorkflowStep.setup,
     this.calibration,
     this.roi,
     this.calibrationImage,

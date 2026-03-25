@@ -154,19 +154,13 @@ class _ProjectCard extends StatelessWidget {
 
   String _stepLabel(WorkflowStep step) {
     switch (step) {
-      case WorkflowStep.cameraSetup:
-        return 'Camera Setup';
-      case WorkflowStep.wavelengthCalibration:
+      case WorkflowStep.setup:
+        return 'Setup';
+      case WorkflowStep.calibration:
         return 'Wavelength Calibration';
-      case WorkflowStep.roiSelection:
-        return 'ROI Selection';
-      case WorkflowStep.blankCapture:
-        return 'Blank Capture';
-      case WorkflowStep.standardCaptures:
-        return 'Standard Captures';
-      case WorkflowStep.absorbanceAnalysis:
-        return 'Absorbance Analysis';
-      case WorkflowStep.unknownCapture:
+      case WorkflowStep.references:
+        return 'Reference Captures';
+      case WorkflowStep.unknown:
         return 'Unknown Capture';
       case WorkflowStep.results:
         return 'Results';
