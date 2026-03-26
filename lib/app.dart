@@ -18,7 +18,8 @@ class SpectroApp extends StatelessWidget {
         '/': (context) => const HomeScreen(),
         '/workflow': (context) {
           final projectId =
-              ModalRoute.of(context)!.settings.arguments as String;
+              ModalRoute.of(context)!.settings.arguments as String?;
+          if (projectId == null) return const HomeScreen();
           return WorkflowScreen(projectId: projectId);
         },
       },

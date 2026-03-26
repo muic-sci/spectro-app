@@ -1,7 +1,8 @@
 services:
   spectro-app:
+    image: spectro-app              # used when image is pre-loaded via docker load
     build:
-      context: ..                   # project root
+      context: ..                   # project root (only needed when building locally)
       dockerfile: docker/Dockerfile
     restart: unless-stopped
     environment:
@@ -10,10 +11,7 @@ services:
       - VIRTUAL_PORT=80
       - LETSENCRYPT_HOST=${LETSENCRYPT_HOST}
     networks:
-      - nginx-proxy                 # must match the network nginx-proxy runs on
+      - default
 
-networks:
-  # This network is created externally by the nginx-proxy + acme-companion
-  # stack. Run `docker network create nginx-proxy` if it does not exist yet.
-  nginx-proxy:
-    external: true
+# Use the default network for nginx-proxy and connect via terminal commands:
+# docker network connect spectro-app_default nginx-proxy

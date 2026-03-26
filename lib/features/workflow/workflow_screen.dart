@@ -157,6 +157,7 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
             icon: Icon(kIsWeb ? Icons.upload_file : Icons.camera),
             label: Text(kIsWeb ? 'Upload Test Photo' : 'Open Camera'),
           ),
+          const SizedBox(height: 12),
           OutlinedButton(
             onPressed: _nextStep,
             child: const Text('Skip (already set up)'),
