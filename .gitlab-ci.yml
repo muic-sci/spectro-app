@@ -18,7 +18,6 @@ variables:
   DOCKER_TLS_CERTDIR: "/certs"
   DOCKER_HOST: tcp://docker:2376
   DOCKER_DRIVER: overlay2
-  DOCKER_BUILDKIT: "1"
 
 # ── Build & push ──────────────────────────────────────────────────────────────
 build-and-push:
@@ -30,9 +29,10 @@ build-and-push:
     - docker info
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
   script:
-    # DOCKER_BUILDKIT=1 enables BuildKit for regular docker build, which
-    # correctly invalidates cached layers when ARG values change. This ensures
-    # the RUN printf step always writes the real tag, not a cached "dev".
+    # Pull :latest for layer caching (pub get layer is reused if pubspec unchanged).
+    # COPY . . is always a cache miss on new commits so RUN printf and flutter
+    # build always run fresh — --cache-from :latest is safe here.
+    - docker pull $IMAGE_NAME:latest || true
     - docker build
         --cache-from $IMAGE_NAME:latest
         --build-arg APP_VERSION=$CI_COMMIT_TAG
@@ -40,8 +40,6 @@ build-and-push:
         --tag $IMAGE_NAME:latest
         -f docker/Dockerfile
         .
-
-    # Push both the versioned tag and latest
     - docker push $IMAGE_NAME:$CI_COMMIT_TAG
     - docker push $IMAGE_NAME:latest
   rules:
@@ -55,20 +53,14 @@ deploy:
     - apk add --no-cache curl openssl
   script:
     - |
-      # Build JSON payload
       PAYLOAD='{"trigger":"spectro-app","ref":"'"$CI_COMMIT_REF_NAME"'","tag":"'"$CI_COMMIT_TAG"'","sha":"'"$CI_COMMIT_SHA"'"}'
-
-      # Compute HMAC-SHA256 signature
       SIGNATURE="sha256=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$DEPLOY_WEBHOOK_SECRET" | sed 's/^.* //')"
-
-      # POST to the webhook server
       HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
         -X POST \
         -H "Content-Type: application/json" \
         -H "X-Hub-Signature-256: $SIGNATURE" \
         -d "$PAYLOAD" \
         "$DEPLOY_WEBHOOK_URL")
-
       if [ "$HTTP_STATUS" -eq 200 ]; then
         echo "Deployment triggered successfully (tag: $CI_COMMIT_TAG)"
       else
