@@ -1,6 +1,8 @@
 services:
   spectro-app:
-    image: spectro-app              # used when image is pre-loaded via docker load
+    # Local dev/manual deploy: leave SPECTRO_APP_IMAGE unset (defaults to local name).
+    # CI/CD server deploy: set SPECTRO_APP_IMAGE=registry.gitlab.com/<group>/spectro-app:latest
+    image: ${SPECTRO_APP_IMAGE:-spectro-app}
     build:
       context: ..                   # project root (only needed when building locally)
       dockerfile: docker/Dockerfile

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:spectro_app/core/constants/app_theme.dart';
+import 'package:spectro_app/core/constants/app_version.dart';
 import 'package:spectro_app/data/models/project.dart';
 import 'package:spectro_app/data/repositories/project_repository.dart';
 
@@ -155,6 +156,8 @@ class _Header extends StatelessWidget {
                     icon: Icons.science_outlined,
                     label: 'Beer-Lambert',
                   ),
+                  const Spacer(),
+                  const _VersionChip(),
                 ],
               ),
               const SizedBox(height: 16),
@@ -195,6 +198,21 @@ class _StatChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _VersionChip extends StatelessWidget {
+  const _VersionChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      appVersion,
+      style: TextStyle(
+        color: Colors.white.withValues(alpha: 0.5),
+        fontSize: 11,
       ),
     );
   }
