@@ -57,28 +57,45 @@ class _PeakIdentificationScreenState extends State<PeakIdentificationScreen> {
 
   void _autoDetectPeaks() {
     final rawY = widget.profile.map((p) => p.y).toList();
+    // Use a larger smoothing window for calibration to merge sub-peaks within
+    // the same broad emission band (e.g., JPEG artefacts inside the 544 nm
+    // green line) while still resolving the five distinct lamp lines.
     final smoothed =
-        movingAverage(rawY, SpectralConstants.defaultSmoothingWindow);
+        movingAverage(rawY, SpectralConstants.calibrationSmoothingWindow);
 
     // Use a prominence threshold of 5 % of the range.
     final maxVal = smoothed.reduce(math.max);
     final minVal = smoothed.reduce(math.min);
     final prominence = (maxVal - minVal) * 0.05;
 
-    final indices = findLocalMaxima(smoothed, minProminence: prominence);
+    final candidates = findLocalMaxima(smoothed, minProminence: prominence);
 
-    // Sort peaks by intensity (descending) and keep the top _numPeaks.
-    indices.sort((a, b) => smoothed[b].compareTo(smoothed[a]));
-    final topIndices = indices.take(_numPeaks).toList()..sort();
+    // Sort by intensity descending, then greedily select up to _numPeaks peaks
+    // that are each at least minSep pixels from every already-selected peak.
+    // This prevents multiple sub-peaks of the same emission line from all being
+    // selected, while still keeping closely-spaced distinct lines (e.g., the
+    // 587 nm and 611.5 nm pair which are only ~40 px apart at typical sensor
+    // resolutions).
+    candidates.sort((a, b) => smoothed[b].compareTo(smoothed[a]));
+    final minSep =
+        math.max(10, (widget.profile.length / 15).round());
+    final selected = <int>[];
+    for (final idx in candidates) {
+      if (selected.every((s) => (s - idx).abs() >= minSep)) {
+        selected.add(idx);
+        if (selected.length == _numPeaks) break;
+      }
+    }
+    selected.sort();
 
     // If fewer peaks found, pad with evenly-spaced defaults.
-    while (topIndices.length < _numPeaks) {
+    while (selected.length < _numPeaks) {
       final gap = widget.profile.length / (_numPeaks + 1);
-      topIndices.add((gap * (topIndices.length + 1)).round());
+      selected.add((gap * (selected.length + 1)).round());
     }
-    topIndices.sort();
+    selected.sort();
 
-    _peakPixels = topIndices
+    _peakPixels = selected
         .map((i) => widget.profile[i.clamp(0, widget.profile.length - 1)].x)
         .toList();
   }

@@ -5,6 +5,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Spectro App — Lego Spectrophotometer">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -124,14 +125,17 @@
       .phone-shell { transform: scale(0.60); transform-origin: center top; }
     }
 
+    /* ── Full-screen host (mobile) ───────────────────────────────────── */
+    #flutter-fullscreen { display: none; }
+
     /* On a real phone browser: drop the frame, go full-screen */
-    @media (max-width: 440px) {
-      body { background: none; flex-direction: column; justify-content: flex-start; }
+    @media (max-width: 500px) {
+      body { background: none; justify-content: flex-start; padding: 0; }
       .device-label, .phone-shell { display: none; }
       #flutter-fullscreen {
         display: block;
         width: 100vw;
-        height: 100vh;
+        height: 100dvh;
       }
     }
   </style>
@@ -142,10 +146,13 @@
   <div class="phone-shell">
     <div class="phone-screen">
       <div class="dynamic-island"></div>
-      <!-- Flutter renders into this div via the custom bootstrap below -->
+      <!-- Flutter renders here on desktop (inside phone frame) -->
       <div id="flutter-host"></div>
     </div>
   </div>
+
+  <!-- Flutter renders here on mobile (full-screen, no frame) -->
+  <div id="flutter-fullscreen"></div>
 
   <script src="flutter_bootstrap.js" async></script>
 </body>

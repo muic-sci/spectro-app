@@ -43,6 +43,29 @@ else:                  C_linear = ((C_norm + 0.055) / 1.055)^2.4
 ```
 This is **on by default** (`lineariseGamma: true`). Pass `lineariseGamma: false` only for debugging or comparison purposes.
 
+### Intensity extraction method: luminance vs max-channel
+
+`extractIntensityProfile` supports two methods via `useMaxChannel`:
+
+| Method | Formula | Use for |
+|--------|---------|---------|
+| Luminance (default) | `0.299R + 0.587G + 0.114B` | Blank, standards, unknown (absorbance) |
+| Max-channel | `max(R, G, B)` | Calibration lamp only |
+
+**Why two methods:** The luminance formula weights blue at only 0.114. For a fluorescent lamp calibration spectrum, this suppresses the violet/blue emission lines at 434.5 nm and 486 nm to ~10–15% of their true brightness. The peak auto-detector would then miss them entirely — all 5 selected "peaks" cluster in the green region, producing a catastrophically wrong calibration. `useMaxChannel: true` gives equal sensitivity to all wavelengths so all 5 lamp lines are properly detected.
+
+For absorbance spectra, luminance is preferred: using max-channel amplifies dark-end noise in the blue/UV region of the spectrum, which at low sample concentrations can produce a spurious absorbance peak near px 0 that exceeds the true peak.
+
+**Calibration peak detection:** Uses `SpectralConstants.calibrationSmoothingWindow = 15` (vs `defaultSmoothingWindow = 5`) to merge JPEG sub-peaks within the same emission band, plus a minimum peak separation of `profile.length / 15` pixels (≈40 px for a 550 px image) to prevent multiple sub-peaks of one emission line from all being selected while still resolving the closely-spaced 587 nm / 611.5 nm pair (~40 px apart).
+
+**Expected calibration values** for the sample dataset (550 px wide images):
+- slope ≈ 0.59 nm/px, intercept ≈ 397 nm, R² > 0.999
+- Peak positions: 434.5 nm ≈ px 61, 486 nm ≈ px 153, 544 nm ≈ px 249, 587 nm ≈ px 316, 611.5 nm ≈ px 365
+
+### Default ROI for pre-cropped images
+
+When no ROI is set (project.roi == null), the fallback is `Rect.fromLTWH(0, 0, 9999, 9999)`. The extraction function clamps to the actual image size, so this effectively uses the full image. This is important for testing with pre-cropped spectral strips (e.g., 550×60 px). The old default `(0, 100, 640, 100)` would produce y0=59, y1=60 on a 60 px tall image — only 1 row.
+
 ### Saturation warning
 A pixel is **saturated** when any R, G, or B channel reaches or exceeds the sensor's maximum (≥ 250/255, to catch JPEG artefacts near true white). Saturated pixels have clipped intensity — the sensor cannot record more photons, so the measured I is artificially high and the computed absorbance A = −log₁₀(I/I₀) is artificially **low or zero** at those wavelengths.
 

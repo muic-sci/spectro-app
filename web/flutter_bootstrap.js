@@ -6,7 +6,8 @@ _flutter.loader.load({
     serviceWorkerVersion: {{flutter_service_worker_version}},
   },
   onEntrypointLoaded: async function (engineInitializer) {
-    const host = document.querySelector('#flutter-host');
+    const isMobile = window.innerWidth <= 500;
+    const host = document.querySelector(isMobile ? '#flutter-fullscreen' : '#flutter-host');
     const appRunner = await engineInitializer.initializeEngine({
       hostElement: host,
     });

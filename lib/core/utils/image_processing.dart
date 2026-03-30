@@ -30,22 +30,29 @@ double _srgbToLinear(int c8bit) {
 /// Extracts a one-dimensional intensity profile from [imageBytes] within [roi].
 ///
 /// For each column *x* inside the ROI, the grey-level values across the ROI
-/// height are averaged using the luminance weights
-/// `0.299 R + 0.587 G + 0.114 B`.
+/// height are averaged using one of two methods:
+///
+/// * **Luminance** (default, [useMaxChannel] = `false`): `0.299 R + 0.587 G + 0.114 B`.
+///   Appropriate for absorbance spectra because it is noise-resistant — the low
+///   weight on the blue channel (0.114) suppresses dark-end artefacts that would
+///   otherwise create spurious high-absorbance readings at low intensities.
+///
+/// * **Max-channel** ([useMaxChannel] = `true`): `max(R, G, B)`. Appropriate for
+///   calibration lamp spectra because it gives equal sensitivity to emission lines
+///   at all wavelengths. The luminance formula would suppress blue lamp peaks
+///   (434.5 nm, 486 nm) to roughly 10–15% of their true brightness, causing them
+///   to be missed by the auto-detection algorithm.
 ///
 /// When [lineariseGamma] is `true` (the default) each channel is converted from
-/// its sRGB-encoded value to a linear light value before averaging. This is
-/// required for Beer-Lambert absorbance to be strictly proportional to
-/// concentration. Without linearisation the encoded values are compressed by
-/// gamma (~2.2) and ratios of intensities — which is what absorbance measures —
-/// are systematically distorted.
+/// its sRGB-encoded value to a linear light value before averaging.
 ///
 /// Returns a list of [DataPoint] where `x` is the pixel column index (relative
-/// to the full image) and `y` is the average grey value (0–255).
+/// to the full image) and `y` is the average intensity (0–255).
 List<DataPoint> extractIntensityProfile(
   Uint8List imageBytes,
   Rect roi, {
   bool lineariseGamma = true,
+  bool useMaxChannel = false,
 }) {
   final decoded = img.decodeImage(imageBytes);
   if (decoded == null) {
@@ -76,7 +83,9 @@ List<DataPoint> extractIntensityProfile(
         g = pixel.g.toDouble();
         b = pixel.b.toDouble();
       }
-      sum += 0.299 * r + 0.587 * g + 0.114 * b;
+      sum += useMaxChannel
+          ? math.max(r, math.max(g, b))
+          : 0.299 * r + 0.587 * g + 0.114 * b;
     }
     profile.add(DataPoint(x: x.toDouble(), y: sum / roiHeight));
   }

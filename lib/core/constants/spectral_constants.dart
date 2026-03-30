@@ -20,4 +20,11 @@ class SpectralConstants {
 
   /// Default window size for moving-average smoothing (must be odd).
   static const int defaultSmoothingWindow = 5;
+
+  /// Smoothing window used specifically for calibration lamp peak detection.
+  /// Larger than [defaultSmoothingWindow] to merge sub-peaks within the same
+  /// broad emission band (e.g., the three closely-spaced green 544 nm peaks
+  /// that JPEG compression can produce), while still resolving the five
+  /// distinct fluorescent lines.
+  static const int calibrationSmoothingWindow = 15;
 }

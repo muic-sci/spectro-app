@@ -236,9 +236,13 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
               final bytes = await _openCamera();
               if (bytes == null) return;
 
-              final roi = project?.roi ?? const Rect.fromLTWH(0, 0, 640, 480);
+              final roi = project?.roi ?? const Rect.fromLTWH(0, 0, 9999, 9999);
               _warnIfSaturated(bytes, roi);
-              final profile = extractIntensityProfile(bytes, roi);
+              // Use max-channel extraction for calibration so that blue lamp
+              // peaks (434.5 nm, 486 nm) are not suppressed by the luminance
+              // formula's low blue weight (0.114).
+              final profile = extractIntensityProfile(bytes, roi,
+                  useMaxChannel: true);
 
               if (!mounted) return;
 
@@ -291,7 +295,7 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
 
   Widget _buildReferences() {
     final project = _project;
-    final roi = project?.roi ?? const Rect.fromLTWH(0, 100, 640, 100);
+    final roi = project?.roi ?? const Rect.fromLTWH(0, 0, 9999, 9999);
 
     return DefaultTabController(
       length: 2,
@@ -405,7 +409,7 @@ class _WorkflowScreenState extends ConsumerState<WorkflowScreen> {
 
   Widget _buildUnknown() {
     final project = _project;
-    final roi = project?.roi ?? const Rect.fromLTWH(0, 100, 640, 100);
+    final roi = project?.roi ?? const Rect.fromLTWH(0, 0, 9999, 9999);
 
     return Padding(
       padding: const EdgeInsets.all(16),
