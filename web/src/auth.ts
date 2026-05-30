@@ -32,4 +32,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
     verifyRequest: "/login/verify",
   },
+  callbacks: {
+    // Database sessions: expose the adapter user's id on the session so server
+    // components / actions can scope queries to the owner (requireUserId).
+    session({ session, user }) {
+      if (session.user) session.user.id = user.id;
+      return session;
+    },
+  },
 });

@@ -27,8 +27,14 @@ spectro-app/
 - **Analysis core:** `web/src/lib/analysis/` is a faithful TS port of `mobile/lib/core` behind one module seam (swappable for a Python sidecar later). Pinned by `web/test/analysis.{unit,golden}.test.ts` against the `materials/002` 550×60 dataset.
   - **Decoder caveat:** the web port decodes with `sharp().rotate()` (EXIF auto-orient) to match the Dart `image` package — omitting `.rotate()` mirrors the spectrum (wavelength axis reversed). sharp and Dart `image` still differ at the sub-peak level, so on the 002 lamp image the two mercury blue lines (434.5/486 nm) nearly merge and the calibration is softer than the Dart-documented R²>0.999 (web gets slope≈0.477, intercept≈392, R²≈0.946). The golden test pins the **decoder-robust science** (λmax≈578 nm, absorbance rising with concentration, Beer-Lambert R²>0.99) tightly and the calibration as a structural+snapshot anchor.
 - **Data model:** `web/prisma/schema.prisma` — Auth.js tables + a spectro domain that ports `project.dart`. The shared two-device unit is `Experiment` (named to avoid colliding with Auth.js `Session`); it owns pairing/step state, `roi`, `calibration` (Json), and `SpectralImage`/`Standard`/`Unknown` rows.
-- **Auth:** email magic-link (Nodemailer) + optional Google; database sessions (not edge-safe), so routes are guarded per-request via `requireUser()` rather than middleware.
-- **Not yet built:** the guided wizard UI, SSE realtime + capture-upload route handlers, ROI editor, charts, CSV export.
+- **Auth:** email magic-link (Nodemailer) + optional Google; database sessions (not edge-safe), so routes are guarded per-request via `requireUser()` / `requireUserId()` (the latter exposes the owner id, attached to the session by the `session` callback in `auth.ts`) rather than middleware.
+- **Guided wizard (in progress):** the laptop flow L0 → L1 → L2 is built.
+  - `L0` `/experiments` — list/create/delete experiments (server component + server actions).
+  - `L1` `/experiments/new` — setup form: name + mode + reference light (client `NewExperimentForm` via `useActionState`); on submit `createExperimentAction` mints a join token and redirects to pairing.
+  - `L2` `/experiments/[id]/pair` — pairing screen; server-renders a QR (the `qrcode` lib) encoding a `spectro://join?e=<id>&t=<token>` deep link plus a short manual join code; 30-min token TTL with a regenerate action.
+  - `L3` `/experiments/[id]` — wizard **shell** scaffolded (persistent frame + `StepRail`); the individual step canvases are the next pass.
+  - Data layer: `web/src/lib/experiments.ts` (server-only, owner-scoped queries + token gen); display copy in `web/src/lib/experiment-meta.ts` (modes/lights/steps, client-safe).
+- **Not yet built:** the L3 step canvases (camera/ROI, calibration, blank, standards, absorbance review, unknown, results), SSE realtime + capture-upload route handlers, ROI editor, charts, CSV export.
 
 ## Tech Stack
 - **Flutter** (Dart, SDK ^3.11.3)

@@ -42,6 +42,7 @@ web/out/
 web/build/
 web/next-env.d.ts
 web/coverage/
+web/*.tsbuildinfo
 # Prisma generated client (regenerated via `prisma generate`)
 web/src/generated/prisma/
 # Local env files (commit only *.example)

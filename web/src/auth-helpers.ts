@@ -14,3 +14,15 @@ export async function requireUser() {
   }
   return session;
 }
+
+/**
+ * Like requireUser, but returns just the owner's id — the value every
+ * experiment query scopes on. The id is attached to the session by the
+ * `session` callback in auth.ts (database sessions).
+ */
+export async function requireUserId(): Promise<string> {
+  const session = await requireUser();
+  const id = (session.user as { id?: string }).id;
+  if (!id) redirect("/login");
+  return id;
+}
