@@ -1,0 +1,200 @@
+// Spectro Web — Prisma 7 schema (PostgreSQL).
+//
+// Two concerns live here:
+//   1. Auth.js (NextAuth v5) tables via @auth/prisma-adapter — User/Account/
+//      Session/VerificationToken.
+//   2. The spectro domain — a port of mobile/lib/data/models/project.dart,
+//      reframed as the two-device "Experiment" from web-refactor-plan.md §7.
+//
+// Naming note: the refactor plan calls the shared unit a "Session", but that
+// collides with Auth.js's own `Session`. We use `Experiment` for the domain
+// object (it owns the pairing/step state and all captures).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  // Prisma 7: the connection URL lives in prisma.config.ts (for Migrate) and is
+  // passed to PrismaClient via the @prisma/adapter-pg driver adapter.
+  provider = "postgresql"
+}
+
+// ── Auth.js (NextAuth) models ────────────────────────────────────────────────
+
+model User {
+  id            String       @id @default(cuid())
+  name          String?
+  email         String?      @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  experiments   Experiment[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// ── Spectro domain ───────────────────────────────────────────────────────────
+
+enum ExperimentMode {
+  beerLambert
+}
+
+enum ReferenceLight {
+  fluorescent
+}
+
+enum WorkflowStep {
+  experimentSetup
+  cameraRoiSetup
+  calibration
+  blank
+  standards
+  absorbanceReview
+  unknown
+  results
+}
+
+enum SpectralImageRole {
+  calibration
+  blank
+  standard
+  unknown
+}
+
+/// The shared two-device unit (laptop drives, phone captures). Owns pairing,
+/// the current step, the ROI, the calibration, and every capture.
+model Experiment {
+  id        String         @id @default(cuid())
+  name      String
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  // Up-front choices (web-refactor-plan.md §3 step 0)
+  mode      ExperimentMode @default(beerLambert)
+  lightType ReferenceLight @default(fluorescent)
+
+  currentStep WorkflowStep @default(experimentSetup)
+
+  // Phone pairing / capture choreography
+  joinToken        String?   @unique
+  joinTokenExpires DateTime?
+  /// CaptureRequest that drives the phone, e.g.
+  /// { type: 'standard', conc: 5, unit: 'mg/L', standardId: '...' }. Null when idle.
+  pendingCapture   Json?
+
+  // ROI in image coordinates: { left, top, width, height }. Null → full-frame
+  // default (DEFAULT_ROI), preserved for pre-cropped strips.
+  roi Json?
+
+  // Wavelength calibration (slope, intercept, rSquared, peaks[]) — stored as a
+  // structured blob; derived, low-churn. Null until calibrated.
+  calibration Json?
+
+  images    SpectralImage[]
+  standards Standard[]
+  unknowns  Unknown[]
+
+  @@index([userId])
+}
+
+/// A captured frame plus its extracted 1-D intensity profile. The image binary
+/// lives in object storage; we keep the URL + the profile (mirrors the Dart
+/// SpectralImage.filePath + intensityProfile).
+model SpectralImage {
+  id           String            @id @default(cuid())
+  experimentId String
+  experiment   Experiment        @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  role         SpectralImageRole
+  url          String
+  capturedAt   DateTime          @default(now())
+  /// IntensityProfile: { points: [{ x, y }, ...] }
+  intensityProfile Json?
+
+  // Back-relations for the role-specific records that point at this image.
+  standard Standard?
+  unknown  Unknown?
+
+  @@index([experimentId])
+}
+
+/// A standard of known concentration. absorbanceSpectrum holds the computed
+/// (wavelength, absorbance) points + λmax once analysed.
+model Standard {
+  id           String     @id @default(cuid())
+  experimentId String
+  experiment   Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  concentration Float
+  unit          String
+
+  imageId String?        @unique
+  image   SpectralImage? @relation(fields: [imageId], references: [id], onDelete: SetNull)
+
+  /// AbsorbanceSpectrum: { points: [{x,y}], lambdaMax?, absorbanceAtLambdaMax? }
+  absorbanceSpectrum Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([experimentId])
+}
+
+/// The unknown sample and its back-calculated concentration.
+model Unknown {
+  id           String     @id @default(cuid())
+  experimentId String
+  experiment   Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  imageId String?        @unique
+  image   SpectralImage? @relation(fields: [imageId], references: [id], onDelete: SetNull)
+
+  absorbanceSpectrum     Json?
+  absorbanceAtLambdaMax  Float?
+  determinedConcentration Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([experimentId])
+}

@@ -5,6 +5,31 @@
 ## What This Is
 A Flutter smartphone app that turns a phone into a full spectrophotometer workflow companion for the **Lego Spectrophotometer** (see `materials/`). Designed as a step-by-step educational tool for students learning Beer-Lambert law and quantitative spectral analysis — replacing the manual ImageJ workflow described in the reference paper.
 
+## Repository layout (monorepo)
+> The repo holds two top-level apps. The original Flutter project now lives under **`mobile/`** (all the paths below that say `lib/...` are now `mobile/lib/...`). A new **web-first** app lives under **`web/`**.
+
+```
+spectro-app/
+├── mobile/       # the existing Flutter app (this document's main subject). Being
+│                 # repurposed to a focus-locked **camera role**; analysis moves to web.
+├── web/          # Spectro Web — Next.js 16 / React 19 / Prisma 7 / HeroUI. The new
+│                 # "brain": guidance, ROI, charts, analysis, results, export.
+├── docs/         # web-refactor-plan.md, web-ux-brief.md, design_handoff_continuous_camera/
+├── materials/    # reference paper + the 002 sample dataset (golden test source)
+└── docker/, .gitlab-ci.yml  # build/deploy the Flutter web target from mobile/
+```
+
+**Why:** running the full analytical workflow on a phone is awkward. The web app guides + analyses on a laptop; the phone, paired via QR, is a focus-locked camera that uploads photos. See `docs/web-refactor-plan.md` and `docs/web-ux-brief.md`. **The two apps share no code** — the web app re-ports the science (see below), it does not import Dart.
+
+### web (foundation pass — done)
+- **Stack:** Next.js 16 (App Router), React 19, TypeScript, Tailwind v4 + **HeroUI v3**, Auth.js v5 (`next-auth@beta`) + `@auth/prisma-adapter`, **Prisma 7** + PostgreSQL (`@prisma/adapter-pg`), `sharp`, Recharts, Vitest.
+- **Theme = the "middle ground":** HeroUI components, re-skinned by overriding HeroUI's semantic CSS tokens (`--background`, `--surface`, `--accent`, …) with the design handoff's dark OKLCH palette in `web/src/app/globals.css`; the signature scientific bits (logo, spectrum bar, ConnBadge, StatusChip, Readout) are ported primitives in `web/src/components/ui/primitives.tsx`. Dark-only (`.dark` always on `<html>`) — an experimental requirement.
+- **Analysis core:** `web/src/lib/analysis/` is a faithful TS port of `mobile/lib/core` behind one module seam (swappable for a Python sidecar later). Pinned by `web/test/analysis.{unit,golden}.test.ts` against the `materials/002` 550×60 dataset.
+  - **Decoder caveat:** the web port decodes with `sharp().rotate()` (EXIF auto-orient) to match the Dart `image` package — omitting `.rotate()` mirrors the spectrum (wavelength axis reversed). sharp and Dart `image` still differ at the sub-peak level, so on the 002 lamp image the two mercury blue lines (434.5/486 nm) nearly merge and the calibration is softer than the Dart-documented R²>0.999 (web gets slope≈0.477, intercept≈392, R²≈0.946). The golden test pins the **decoder-robust science** (λmax≈578 nm, absorbance rising with concentration, Beer-Lambert R²>0.99) tightly and the calibration as a structural+snapshot anchor.
+- **Data model:** `web/prisma/schema.prisma` — Auth.js tables + a spectro domain that ports `project.dart`. The shared two-device unit is `Experiment` (named to avoid colliding with Auth.js `Session`); it owns pairing/step state, `roi`, `calibration` (Json), and `SpectralImage`/`Standard`/`Unknown` rows.
+- **Auth:** email magic-link (Nodemailer) + optional Google; database sessions (not edge-safe), so routes are guarded per-request via `requireUser()` rather than middleware.
+- **Not yet built:** the guided wizard UI, SSE realtime + capture-upload route handlers, ROI editor, charts, CSV export.
+
 ## Tech Stack
 - **Flutter** (Dart, SDK ^3.11.3)
 - **State management**: `flutter_riverpod` (StateNotifier pattern)
@@ -154,13 +179,27 @@ lib/
 - `ed3c01021_si_006.xlsx` / `_007.xlsx` — fluorescence data templates
 
 ## Build & Run
+
+### Mobile (Flutter) — run from `mobile/`
 ```bash
+cd mobile
 flutter pub get
 flutter run                  # connected Android/iOS phone (required for camera)
 flutter run -d macos         # macOS desktop (no camera)
 flutter run -d chrome        # web (no camera)
 ```
 A **real phone** is required for full camera functionality (focus lock, spectrum capture).
+
+### Web (Next.js) — run from `web/`
+```bash
+cd web
+npm install
+docker compose up -d         # Postgres + Mailpit (dev mail inbox at :8025)
+cp .env.example .env         # then: npx auth secret  → AUTH_SECRET
+npm run prisma:migrate
+npm run dev                  # http://localhost:3000
+npm test                     # vitest: analysis unit + golden-data tests
+```
 
 ## Git Commit Convention
 All commits must follow [Conventional Commits](https://www.conventionalcommits.org/):

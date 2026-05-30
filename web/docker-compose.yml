@@ -1,0 +1,30 @@
+# Local development services for Spectro Web.
+# `docker compose up -d` then copy .env.example → .env and run `npm run prisma:migrate`.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: spectro
+      POSTGRES_PASSWORD: spectro
+      POSTGRES_DB: spectro
+    ports:
+      - "5433:5432"
+    volumes:
+      - spectro_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spectro -d spectro"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Dev SMTP inbox — magic-link emails land in the web UI at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP (matches EMAIL_SERVER in .env.example)
+      - "8025:8025" # web UI
+
+volumes:
+  spectro_pgdata:

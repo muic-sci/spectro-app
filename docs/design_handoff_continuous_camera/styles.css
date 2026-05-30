@@ -1,0 +1,96 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* surfaces — dark, low-emission, cool-neutral */
+  --desk:      oklch(0.145 0.012 255);
+  --bg:        oklch(0.178 0.012 256);
+  --panel:     oklch(0.214 0.013 256);
+  --panel-2:   oklch(0.246 0.014 256);
+  --raised:    oklch(0.285 0.015 256);
+  --line:      oklch(0.318 0.016 256);
+  --line-soft: oklch(0.262 0.014 256);
+
+  /* text */
+  --t1: oklch(0.945 0.005 250);
+  --t2: oklch(0.745 0.011 256);
+  --t3: oklch(0.585 0.013 258);
+  --t4: oklch(0.475 0.013 258);
+
+  /* accent — spectral cyan (overridable by tweak) */
+  --accent:      oklch(0.825 0.118 199);
+  --accent-dim:  oklch(0.46 0.07 199);
+  --accent-ink:  oklch(0.20 0.03 220);
+  --accent-glow: oklch(0.825 0.118 199 / 0.30);
+
+  /* status (all on the spectrum) */
+  --ok:    oklch(0.80 0.15 152);
+  --warn:  oklch(0.82 0.135 79);
+  --danger:oklch(0.685 0.175 26);
+  --ok-bg:    oklch(0.80 0.15 152 / 0.13);
+  --warn-bg:  oklch(0.82 0.135 79 / 0.14);
+  --danger-bg:oklch(0.685 0.175 26 / 0.15);
+
+  --font-sans: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* the signature visible-spectrum gradient, 400nm -> 700nm */
+  --spectrum: linear-gradient(90deg,
+    #7b2ff7 0%, #4453ff 16%, #2b8fff 30%,
+    #1ad6d6 44%, #38d65a 58%, #d6d61a 72%,
+    #ff9a1a 86%, #ff3b3b 100%);
+
+  --r-sm: 7px;  --r-md: 11px;  --r-lg: 16px;  --r-xl: 22px;
+  --shadow: 0 18px 50px -12px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.02);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--desk);
+  color: var(--t1);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button { font-family: inherit; cursor: pointer; }
+::selection { background: var(--accent-glow); }
+
+/* scrollbars inside dark panels */
+.scry { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.scry::-webkit-scrollbar { width: 9px; height: 9px; }
+.scry::-webkit-scrollbar-thumb { background: var(--line); border-radius: 9px; border: 2px solid transparent; background-clip: content-box; }
+.scry::-webkit-scrollbar-track { background: transparent; }
+
+.mono { font-family: var(--font-mono); font-feature-settings: "tnum" 1; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* ── keyframes ─────────────────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse-soft { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 var(--accent-glow); }
+  70%  { box-shadow: 0 0 0 14px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes scan-y {
+  0%   { transform: translateY(0%); opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { transform: translateY(2400%); opacity: 0; }
+}
+@keyframes draw { from { stroke-dashoffset: var(--len); } to { stroke-dashoffset: 0; } }
+@keyframes blink { 0%,49% { opacity: 1; } 50%,100% { opacity: 0.25; } }
+
+.rise { animation: rise 0.4s cubic-bezier(.2,.7,.3,1) both; }
+.fade { animation: fade 0.4s ease both; }
+
+/* dotted measurement grid texture for empty canvases */
+.grid-tex {
+  background-image: radial-gradient(circle at 1px 1px, oklch(0.32 0.015 256) 1px, transparent 0);
+  background-size: 22px 22px;
+}

@@ -23,7 +23,7 @@ migrate_working_dir/
 # is commented out by default.
 #.vscode/
 
-# Flutter/Dart/Pub related
+# Flutter/Dart/Pub related (app now lives in mobile)
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
@@ -32,7 +32,23 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+mobile/build/
 /coverage/
+
+# ── Web app (web) ───────────────────────────────────────────────────────
+node_modules/
+web/.next/
+web/out/
+web/build/
+web/next-env.d.ts
+web/coverage/
+# Prisma generated client (regenerated via `prisma generate`)
+web/src/generated/prisma/
+# Local env files (commit only *.example)
+.env
+.env*.local
+web/.env
+web/.env*.local
 
 # Dart code generation
 *.g.dart

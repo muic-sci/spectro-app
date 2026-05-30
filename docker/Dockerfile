@@ -1,16 +1,17 @@
 # ── Stage 1: Build Flutter web ───────────────────────────────────────────────
+# Build context is the monorepo root; the Flutter app lives in mobile.
 FROM ghcr.io/cirruslabs/flutter:stable AS builder
 
 WORKDIR /app
 
 # Copy dependency manifests first for layer caching.
 # flutter pub get is cached as long as pubspec.yaml/lock don't change.
-COPY pubspec.yaml pubspec.lock ./
+COPY mobile/pubspec.yaml mobile/pubspec.lock ./
 RUN flutter pub get
 
 # Copy source — always a cache miss on new commits, so everything below
 # (including RUN printf) always runs fresh regardless of --cache-from.
-COPY . .
+COPY mobile/ ./
 
 # Version tag injected by CI (e.g. v1.2.3); defaults to "dev" for local builds.
 ARG APP_VERSION=dev

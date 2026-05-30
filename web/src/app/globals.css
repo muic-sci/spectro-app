@@ -1,0 +1,219 @@
+/*
+ * Spectro Web theme — the "middle ground".
+ *
+ * Strategy: use HeroUI v3 (community-maintained, accessible, react-aria based)
+ * as the component library, but re-skin its semantic design tokens with the
+ * palette from docs/design_handoff_continuous_camera (dark, low-emission OKLCH,
+ * spectral-cyan accent). HeroUI components (Button, Card, Input, Modal, Tabs…)
+ * therefore render in the design's dark scientific look automatically, while the
+ * design's signature extras (spectrum gradient, accent glow, Space Grotesk / IBM
+ * Plex Mono, measurement-grid texture) live as custom tokens for our own
+ * components in src/components/ui.
+ *
+ * Dark UI is an experimental requirement (stray screen light contaminates the
+ * measurement), not a preference — so the app is dark-only. We still set `.dark`
+ * on <html> so HeroUI's dark-scoped rules apply.
+ */
+
+@import "@heroui/styles";
+
+/* Make `dark:` utilities key off the .dark class (set on <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Design palette (from styles.css in the handoff) ─────────────────────── */
+:root,
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* surfaces — dark, low-emission, cool-neutral */
+  --desk: oklch(0.145 0.012 255);
+  --bg: oklch(0.178 0.012 256);
+  --panel: oklch(0.214 0.013 256);
+  --panel-2: oklch(0.246 0.014 256);
+  --raised: oklch(0.285 0.015 256);
+  --line: oklch(0.318 0.016 256);
+  --line-soft: oklch(0.262 0.014 256);
+
+  /* text ramp */
+  --t1: oklch(0.945 0.005 250);
+  --t2: oklch(0.745 0.011 256);
+  --t3: oklch(0.585 0.013 258);
+  --t4: oklch(0.475 0.013 258);
+
+  /* accent — spectral cyan */
+  --accent-color: oklch(0.825 0.118 199);
+  --accent-dim: oklch(0.46 0.07 199);
+  --accent-ink: oklch(0.2 0.03 220);
+  --accent-glow: oklch(0.825 0.118 199 / 0.3);
+
+  /* status (all on the spectrum) */
+  --ok: oklch(0.8 0.15 152);
+  --warn: oklch(0.82 0.135 79);
+  --danger-color: oklch(0.685 0.175 26);
+  --ok-bg: oklch(0.8 0.15 152 / 0.13);
+  --warn-bg: oklch(0.82 0.135 79 / 0.14);
+  --danger-soft-bg: oklch(0.685 0.175 26 / 0.15);
+
+  /* the signature visible-spectrum gradient, 400nm → 700nm */
+  --spectrum: linear-gradient(
+    90deg,
+    #7b2ff7 0%, #4453ff 16%, #2b8fff 30%, #1ad6d6 44%,
+    #38d65a 58%, #d6d61a 72%, #ff9a1a 86%, #ff3b3b 100%
+  );
+
+  /* design radii + shadow */
+  --r-sm: 7px;
+  --r-md: 11px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --shadow-design:
+    0 18px 50px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.02);
+
+  /* ── Re-map HeroUI v3 semantic tokens onto the design palette ─────────── */
+  --background: var(--desk);
+  --foreground: var(--t1);
+
+  --surface: var(--panel);
+  --surface-foreground: var(--t1);
+  --surface-secondary: var(--panel-2);
+  --surface-secondary-foreground: var(--t1);
+  --surface-tertiary: var(--raised);
+  --surface-tertiary-foreground: var(--t1);
+
+  --overlay: var(--panel-2);
+  --overlay-foreground: var(--t1);
+
+  --muted: var(--t3);
+
+  --default: var(--panel-2);
+  --default-foreground: var(--t1);
+
+  --accent: var(--accent-color);
+  --accent-foreground: var(--accent-ink);
+
+  --field-background: var(--panel-2);
+  --field-foreground: var(--t1);
+  --field-placeholder: var(--t3);
+
+  --success: var(--ok);
+  --success-foreground: var(--accent-ink);
+  --warning: var(--warn);
+  --warning-foreground: var(--accent-ink);
+  --danger: var(--danger-color);
+  --danger-foreground: var(--t1);
+
+  --border: var(--line);
+  --separator: var(--line-soft);
+  --focus: var(--accent-color);
+  --link: var(--accent-color);
+
+  /* design uses an 11px medium radius as its base */
+  --radius: var(--r-md);
+}
+
+/* ── Expose design tokens to Tailwind v4 as utilities ────────────────────── *
+ * `inline` keeps the utilities referencing the live CSS variables above, so
+ * e.g. `bg-panel`, `text-t2`, `rounded-lg`, `font-mono` all track the theme.   */
+@theme inline {
+  --font-sans: var(--font-space-grotesk), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, "SF Mono", monospace;
+
+  --color-desk: var(--desk);
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+
+  --color-t1: var(--t1);
+  --color-t2: var(--t2);
+  --color-t3: var(--t3);
+  --color-t4: var(--t4);
+
+  --color-accent: var(--accent-color);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-ink: var(--accent-ink);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger-color);
+
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--desk);
+  color: var(--t1);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent-glow);
+}
+
+/* numeric / tabular helpers used by the science readouts */
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* dotted measurement-grid texture for empty canvases */
+.grid-tex {
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    oklch(0.32 0.015 256) 1px,
+    transparent 0
+  );
+  background-size: 22px 22px;
+}
+
+/* keyframes carried over from the handoff for our custom components */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+  70% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.4s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}

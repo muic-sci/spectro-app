@@ -4,6 +4,10 @@
 
 # Build output (built inside Docker)
 build/
+mobile/build/
+
+# The web app is not part of the Flutter image build context
+web/
 
 # Reference materials — large PDFs/spreadsheets not needed for the web build
 materials/
