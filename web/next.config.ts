@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   experimental: {
     // HeroUI ships ESM; optimise its barrel imports.
     optimizePackageImports: ["@heroui/react"],
+    // Captures are phone photos uploaded through a server action (the dev
+    // stand-in for the paired phone). Raise the default 1 MB action body cap.
+    serverActions: {
+      bodySizeLimit: "12mb",
+    },
   },
 };
 

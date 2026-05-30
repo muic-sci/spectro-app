@@ -85,3 +85,61 @@ export const WIZARD_STEPS: StepMeta[] = WORKFLOW_STEPS.filter(
 export function stepIndex(step: WorkflowStep): number {
   return WORKFLOW_STEPS.findIndex((s) => s.value === step);
 }
+
+/** The next wizard step after `step`, or null if it's the last one. */
+export function nextWizardStep(step: WorkflowStep): WorkflowStep | null {
+  const i = WIZARD_STEPS.findIndex((s) => s.value === step);
+  return i >= 0 && i < WIZARD_STEPS.length - 1 ? WIZARD_STEPS[i + 1].value : null;
+}
+
+/** The previous wizard step before `step`, or null if it's the first one. */
+export function prevWizardStep(step: WorkflowStep): WorkflowStep | null {
+  const i = WIZARD_STEPS.findIndex((s) => s.value === step);
+  return i > 0 ? WIZARD_STEPS[i - 1].value : null;
+}
+
+export interface StepGuidance {
+  /** Why this step matters (the teaching surface — ported from info_card). */
+  why: string;
+  /** What to do now. */
+  todo: string;
+}
+
+/**
+ * Per-step guidance copy (web-ux-brief.md §5). Plain language for first-time
+ * students — every step answers "why am I doing this?" and "what do I do?".
+ */
+export const STEP_GUIDANCE: Record<WorkflowStep, StepGuidance> = {
+  experimentSetup: {
+    why: "A couple of choices set the lamp peaks, units and expected ranges for everything that follows.",
+    todo: "Name the experiment and pick a mode and reference light.",
+  },
+  cameraRoiSetup: {
+    why: "Every measurement must come from the exact same region of the strip, so they're all comparable.",
+    todo: "On your phone, frame the rainbow strip and lock focus. Here, mark the strip — or use the full strip if your image is already cropped.",
+  },
+  calibration: {
+    why: "A fluorescent lamp emits at known, fixed wavelengths. Finding those bright lines in your photo tells us which pixel is which colour.",
+    todo: "Capture the lamp spectrum. We'll find the 5 lines automatically — check the fit looks right.",
+  },
+  blank: {
+    why: "The blank is your 100%-light reference — solvent and cuvette with no sample. Absorbance is measured against it.",
+    todo: "Put the solvent-only cuvette in the holder and capture it.",
+  },
+  standards: {
+    why: "Known concentrations let us draw the line that turns absorbance into concentration. Two points make a line; more make it trustworthy.",
+    todo: "For each standard, enter its concentration and capture it. You need at least two.",
+  },
+  absorbanceReview: {
+    why: "λmax is the wavelength your compound absorbs most — measuring there gives the strongest, most reliable signal. The straight line through your standards is Beer's law: A = ε·l·c.",
+    todo: "Check λmax sits on the peak and confirm the line fits your points.",
+  },
+  unknown: {
+    why: "Now we reverse the line: measure the unknown's absorbance and read its concentration off the calibration curve (c = (A − b) / m).",
+    todo: "Capture your unknown sample.",
+  },
+  results: {
+    why: "Here's everything you measured, ready to record in your lab report.",
+    todo: "Download the CSV or share your results.",
+  },
+};

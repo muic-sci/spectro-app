@@ -43,6 +43,8 @@ web/build/
 web/next-env.d.ts
 web/coverage/
 web/*.tsbuildinfo
+# Uploaded capture images (dev local-disk store; object storage in prod)
+web/storage/
 # Prisma generated client (regenerated via `prisma generate`)
 web/src/generated/prisma/
 # Local env files (commit only *.example)
