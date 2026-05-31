@@ -6,28 +6,20 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:spectro_app/features/camera/widgets/focus_lock_indicator.dart';
 
-/// A camera screen for capturing spectrum images.
-///
-/// Returns the file path of the captured image via [Navigator.pop].
-class CameraScreen extends StatefulWidget {
-  /// Unique project identifier.
-  final String projectId;
+/// Camera screen for capturing a spectrum strip. Tap to lock focus + exposure
+/// (the hardware feature that keeps every measurement comparable), then shoot.
+/// Returns the captured file path via [Navigator.pop].
+class CaptureScreen extends StatefulWidget {
+  /// What the student is shooting, e.g. "Capture the BLANK".
+  final String label;
 
-  /// Purpose of the capture, e.g. 'calibration', 'blank', 'standard', 'unknown'.
-  final String purpose;
-
-  const CameraScreen({
-    super.key,
-    required this.projectId,
-    required this.purpose,
-  });
+  const CaptureScreen({super.key, required this.label});
 
   @override
-  State<CameraScreen> createState() => _CameraScreenState();
+  State<CaptureScreen> createState() => _CaptureScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen>
-    with WidgetsBindingObserver {
+class _CaptureScreenState extends State<CaptureScreen> with WidgetsBindingObserver {
   CameraController? _controller;
   bool _isInitialised = false;
   bool _isFocusLocked = false;
@@ -69,7 +61,6 @@ class _CameraScreenState extends State<CameraScreen>
         return;
       }
 
-      // Prefer the back camera.
       final backCamera = cameras.firstWhere(
         (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cameras.first,
@@ -87,7 +78,7 @@ class _CameraScreenState extends State<CameraScreen>
       if (!mounted) return;
       setState(() => _isInitialised = true);
     } catch (e) {
-      setState(() => _errorMessage = 'Camera initialisation failed: $e');
+      if (mounted) setState(() => _errorMessage = 'Camera initialisation failed: $e');
     }
   }
 
@@ -95,8 +86,6 @@ class _CameraScreenState extends State<CameraScreen>
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
 
-    // Compute the normalised focus point from the tap position within the
-    // preview area.
     final renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
     final size = renderBox.size;
@@ -111,7 +100,7 @@ class _CameraScreenState extends State<CameraScreen>
       await controller.setFocusMode(FocusMode.locked);
       await controller.setExposurePoint(point);
       await controller.setExposureMode(ExposureMode.locked);
-      setState(() => _isFocusLocked = true);
+      if (mounted) setState(() => _isFocusLocked = true);
     } catch (_) {
       // Some devices may not support focus/exposure locking.
     }
@@ -119,34 +108,22 @@ class _CameraScreenState extends State<CameraScreen>
 
   Future<void> _captureImage() async {
     final controller = _controller;
-    if (controller == null ||
-        !controller.value.isInitialized ||
-        _isCapturing) {
+    if (controller == null || !controller.value.isInitialized || _isCapturing) {
       return;
     }
 
     setState(() => _isCapturing = true);
-
     try {
       final xFile = await controller.takePicture();
 
-      final appDir = await getApplicationDocumentsDirectory();
-      final targetDir = Directory(
-        '${appDir.path}/spectro_app/${widget.projectId}',
-      );
-      if (!targetDir.existsSync()) {
-        targetDir.createSync(recursive: true);
-      }
-
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = '${widget.purpose}_$timestamp.jpg';
-      final targetPath = '${targetDir.path}/$fileName';
-
+      final tmpDir = await getTemporaryDirectory();
+      final targetDir = Directory('${tmpDir.path}/spectro_capture');
+      if (!targetDir.existsSync()) targetDir.createSync(recursive: true);
+      final targetPath =
+          '${targetDir.path}/capture_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final savedFile = await File(xFile.path).copy(targetPath);
 
-      if (mounted) {
-        Navigator.pop(context, savedFile.path);
-      }
+      if (mounted) Navigator.pop(context, savedFile.path);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -158,17 +135,12 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  String get _titleText {
-    final label = widget.purpose[0].toUpperCase() + widget.purpose.substring(1);
-    return 'Capture $label Spectrum';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(_titleText),
+        title: Text(widget.label),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
       ),
@@ -204,13 +176,11 @@ class _CameraScreenState extends State<CameraScreen>
               alignment: Alignment.center,
               children: [
                 CameraPreview(controller),
-                // Instruction overlay shown before focus is locked.
                 if (!_isFocusLocked)
                   const Positioned(
                     top: 32,
-                    child: _InstructionBanner(text: 'Tap to Focus & Lock'),
+                    child: _InstructionBanner(text: 'Tap the strip to focus & lock'),
                   ),
-                // Focus lock status indicator.
                 Positioned(
                   top: 16,
                   right: 16,
@@ -220,7 +190,6 @@ class _CameraScreenState extends State<CameraScreen>
             ),
           ),
         ),
-        // Capture button
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
@@ -235,11 +204,8 @@ class _CameraScreenState extends State<CameraScreen>
   }
 }
 
-// ── Private helper widgets ──────────────────────────────────────────────────
-
 class _InstructionBanner extends StatelessWidget {
   final String text;
-
   const _InstructionBanner({required this.text});
 
   @override
@@ -250,10 +216,7 @@ class _InstructionBanner extends StatelessWidget {
         color: Colors.black54,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(color: Colors.white, fontSize: 16),
-      ),
+      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 16)),
     );
   }
 }
@@ -261,7 +224,6 @@ class _InstructionBanner extends StatelessWidget {
 class _CaptureButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool isCapturing;
-
   const _CaptureButton({required this.onPressed, required this.isCapturing});
 
   @override
@@ -280,18 +242,12 @@ class _CaptureButton extends StatelessWidget {
               ? const SizedBox(
                   width: 32,
                   height: 32,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 3,
-                  ),
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
                 )
               : Container(
                   width: 56,
                   height: 56,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                  ),
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
                 ),
         ),
       ),

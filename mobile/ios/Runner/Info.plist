@@ -4,6 +4,15 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Spectro Capture uses the camera to photograph the spectrum strip and scan the pairing QR code.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Spectro Web is often reached over http on a local network during a
+		     lab session; allow cleartext to the paired computer. -->
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

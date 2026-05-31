@@ -3,15 +3,15 @@
 > **Maintenance rule**: Keep this file up to date whenever significant changes are made — especially to domain knowledge, the data model, workflow steps, or architectural decisions. If you change how absorbance is computed, how calibration works, what a step does, or what a model field means, update the relevant section here before finishing the task.
 
 ## What This Is
-A Flutter smartphone app that turns a phone into a full spectrophotometer workflow companion for the **Lego Spectrophotometer** (see `materials/`). Designed as a step-by-step educational tool for students learning Beer-Lambert law and quantitative spectral analysis — replacing the manual ImageJ workflow described in the reference paper.
+An educational spectrophotometer companion for the **Lego Spectrophotometer** (see `materials/`) — teaching Beer-Lambert quantitation, replacing the manual ImageJ workflow from the reference paper. **The product is now web-first:** the laptop (`web/`) guides + analyses; the phone (`mobile/`) is a focus-locked camera that pairs over a QR and uploads photos. The original Flutter app was a full on-phone workflow tool; that workflow + science has been ported to `web/`, and `mobile/` is now stripped to the camera client. The mobile-implementation sections lower in this doc (Workflow Steps, Image Processing Features, File Structure) describe that **original** on-phone app — keep them as the **domain/science reference** (the formulas are now implemented in `web/src/lib/analysis`), but note the mobile app no longer performs analysis.
 
 ## Repository layout (monorepo)
 > The repo holds two top-level apps. The original Flutter project now lives under **`mobile/`** (all the paths below that say `lib/...` are now `mobile/lib/...`). A new **web-first** app lives under **`web/`**.
 
 ```
 spectro-app/
-├── mobile/       # the existing Flutter app (this document's main subject). Being
-│                 # repurposed to a focus-locked **camera role**; analysis moves to web.
+├── mobile/       # the Flutter app, now stripped to a focus-locked **camera client**
+│                 # for web/ (scan QR → join → capture → upload). No on-phone analysis.
 ├── web/          # Spectro Web — Next.js 16 / React 19 / Prisma 7 / HeroUI. The new
 │                 # "brain": guidance, ROI, charts, analysis, results, export.
 ├── docs/         # web-refactor-plan.md, web-ux-brief.md, design_handoff_continuous_camera/
@@ -43,7 +43,12 @@ spectro-app/
   - Verified end-to-end against the dev server: SSE auth (cookie/token/401), phone presence reaching the laptop, token-authed capture running the pipeline + notifying the laptop, wrong-token rejection, `pendingCapture` cleared.
   - **Capture pipeline** (`web/src/lib/capture.ts`, server-only): `processCapture` decodes the photo (sharp), extracts the ROI profile (max-channel for calibration, luminance otherwise), checks saturation, persists the `SpectralImage` + profile, stores the binary on disk (`web/src/lib/storage.ts` → `web/storage/`, gitignored; object storage later), and runs role analysis (calibration fits pixel→λ). Invoked today by the `uploadCaptureAction` server action (the dev stand-in for the phone — file upload from the laptop; `next.config.ts` raises the action body cap to 12mb). Image binaries are served owner-scoped via `GET /api/experiments/[id]/images/[imageId]`. Verified end-to-end: the lamp fixture through the real pipeline reproduces the golden calibration (slope≈0.477, intercept≈392, R²≈0.946, peaks≈[66,251,328,370,458]).
   - Data layer: `web/src/lib/experiments.ts` (server-only, owner-scoped queries + token gen); display copy + per-step guidance (`STEP_GUIDANCE`) + step-nav helpers in `web/src/lib/experiment-meta.ts` (client-safe). Charts: `web/src/components/charts/spectrum-chart.tsx` (Recharts, themed).
-- **Not yet built:** the **native Flutter app stripped to a camera role** (QR scan → join → focus/exposure lock → capture → upload — would hit the same `/api/experiments/[id]/{events,captures}` routes the web `/join/[token]` client already uses; needs a real device to verify). Smaller refinements: the visual ROI drag editor (L3.1 is full-strip/numeric); interactive λmax-by-tapping the chart (the numeric input works); reconnect/error-state polish; multi-instance realtime (the event bus is in-process). The web flow is otherwise **complete end-to-end** including the cross-device pairing/capture loop (testable browser-to-browser).
+### mobile (camera client — done; needs on-device verification)
+`mobile/` has been **stripped from the full workflow app to a focus-locked camera client** for Spectro Web. Removed: all on-phone analysis/workflow/ROI/results screens, the Dart analysis core, Hive/Riverpod. Kept: the camera + focus/exposure-lock UX. Deps trimmed to `camera`, `path_provider`, `mobile_scanner` (QR), `http` + `http_parser`.
+- **Flow:** `JoinScreen` (scan) → `QrScanScreen` (`mobile_scanner`) → parse the QR's `…/join/<token>` URL (`core/utils/join_link.dart`) → `SpectroClient.resolve()` (`GET /api/join/<token>` → id/name/pending) → `SessionScreen`: subscribes to SSE (`core/api/sse_client.dart`, dart:io with auto-reconnect), shows the laptop's requested capture, opens `CaptureScreen` (tap-to-lock focus+exposure, shutter), and uploads multipart (image/jpeg) to `POST /api/experiments/<id>/captures` with the token. Hits the **same routes** as the web `/join/[token]` client.
+- **Permissions:** Android manifest adds INTERNET + CAMERA + `usesCleartextTraffic="true"` (local-network http, dev); iOS Info.plist adds `NSCameraUsageDescription` + `NSAppTransportSecurity` arbitrary-loads (dev). Both would tighten to https in prod.
+- Verified: `flutter analyze` clean, `flutter test` (join-link parser) green, and the `/api/join` contract tested live. **Camera/focus-lock/QR need a physical device** — not run here.
+- **Still TODO:** visual ROI drag editor (L3.1 is full-strip/numeric); interactive λmax-by-tapping the chart (numeric input works); reconnect/error-state polish; multi-instance realtime (the event bus is in-process). The full product is otherwise **complete end-to-end** (web verified browser-to-browser; native app built, pending device test).
 
 ## Tech Stack
 - **Flutter** (Dart, SDK ^3.11.3)
@@ -203,7 +208,7 @@ flutter run                  # connected Android/iOS phone (required for camera)
 flutter run -d macos         # macOS desktop (no camera)
 flutter run -d chrome        # web (no camera)
 ```
-A **real phone** is required for full camera functionality (focus lock, spectrum capture).
+A **real phone** is required for full camera functionality (focus lock, QR scan, spectrum capture). The phone must be able to reach the laptop's Spectro Web server over the local network — pair by scanning the QR on the web pairing screen (it encodes the laptop's `http://<lan-ip>:3000/join/<token>` URL), so run `web` bound to the LAN and ensure both devices share a network.
 
 ### Web (Next.js) — run from `web/`
 ```bash
