@@ -6,7 +6,41 @@
  * schema); this module only adds the human-facing labels and teaching copy
  * (ported from the mobile app's info_card content + web-ux-brief.md §5).
  */
-import type { ExperimentMode, ReferenceLight, WorkflowStep } from "@/generated/prisma/enums";
+import type {
+  ExperimentMode,
+  ReferenceLight,
+  SpectralImageRole,
+  WorkflowStep,
+} from "@/generated/prisma/enums";
+
+/**
+ * What the laptop is asking the phone to shoot (stored as Experiment.pendingCapture).
+ * Drives the phone's capture prompt and tells the captures route the role.
+ */
+export interface CaptureRequest {
+  role: SpectralImageRole;
+  /** Human prompt shown on the phone, e.g. "Capture the BLANK". */
+  label: string;
+  /** For standards. */
+  concentration?: number;
+  unit?: string;
+}
+
+/** Parse the loosely-typed pendingCapture Json into a CaptureRequest. */
+export function parseCaptureRequest(j: unknown): CaptureRequest | null {
+  if (j && typeof j === "object") {
+    const r = j as Record<string, unknown>;
+    if (typeof r.role === "string" && typeof r.label === "string") {
+      return {
+        role: r.role as SpectralImageRole,
+        label: r.label,
+        concentration: typeof r.concentration === "number" ? r.concentration : undefined,
+        unit: typeof r.unit === "string" ? r.unit : undefined,
+      };
+    }
+  }
+  return null;
+}
 
 export interface ModeMeta {
   value: ExperimentMode;

@@ -1,24 +1,24 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import QRCode from "qrcode";
 import { buttonVariants } from "@heroui/react";
 import { requireUserId } from "@/auth-helpers";
 import { getExperiment, joinTokenExpired } from "@/lib/experiments";
 import { modeMeta, lightMeta } from "@/lib/experiment-meta";
-import {
-  ConnBadge,
-  Icon,
-  SpectroMark,
-  SpectrumBar,
-  StatusChip,
-} from "@/components/ui/primitives";
+import { isPhoneOnline } from "@/lib/realtime";
+import { Icon, SpectroMark, SpectrumBar, StatusChip } from "@/components/ui/primitives";
+import { PairingLive } from "@/components/realtime/pairing-live";
 import { regenerateJoinTokenAction } from "../../actions";
 
 export const metadata = { title: "Pair your phone · Spectro Web" };
 
-/** The native-app deep link the QR encodes (web-refactor-plan.md §4.1). */
-function joinDeepLink(experimentId: string, token: string): string {
-  return `spectro://join?e=${experimentId}&t=${token}`;
+/** Absolute URL the phone opens after scanning (the join token is the key). */
+async function joinUrl(token: string): Promise<string> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}/join/${token}`;
 }
 
 /** L2 — pairing. Show the QR + join code; the phone scans to join the session. */
@@ -33,7 +33,7 @@ export default async function PairPage({ params }: { params: Promise<{ id: strin
   const showQr = Boolean(token) && !expired;
 
   const qrSvg = showQr
-    ? await QRCode.toString(joinDeepLink(experiment.id, token!), {
+    ? await QRCode.toString(await joinUrl(token!), {
         type: "svg",
         margin: 1,
         width: 220,
@@ -51,15 +51,15 @@ export default async function PairPage({ params }: { params: Promise<{ id: strin
             {experiment.name} · {modeMeta(experiment.mode).label}
           </p>
         </div>
-        <ConnBadge status="pairing" />
+        <PairingLive experimentId={experiment.id} initialPhoneOnline={isPhoneOnline(experiment.id)} />
       </header>
 
       <SpectrumBar height={8} />
 
       <section className="flex flex-col items-center gap-5 rounded-lg border border-line bg-panel p-7 text-center">
         <p className="max-w-sm text-sm text-t2">
-          Scan this with the Spectro app on your phone. Your phone becomes the camera — everything
-          else happens here.
+          Scan this with your phone&apos;s camera to open the capture screen. Your phone becomes the
+          camera — everything else happens here.
         </p>
 
         {showQr ? (

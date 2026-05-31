@@ -3,48 +3,24 @@
  * with its measured absorbance at λmax (once a blank + calibration exist). The
  * Beer-Lambert curve itself is reviewed in the next step.
  */
-import { CapturePanel } from "@/components/wizard/capture-panel";
+import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, StatusChip } from "@/components/ui/primitives";
 import { deleteStandardAction } from "@/app/experiments/[id]/actions";
 import type { StandardAnalysis } from "@/lib/experiment-analysis";
-
-function ConcentrationFields() {
-  return (
-    <div className="flex gap-3">
-      <label className="flex flex-1 flex-col gap-1">
-        <span className="text-xs uppercase tracking-wide text-t3">Concentration</span>
-        <input
-          type="number"
-          name="concentration"
-          step="any"
-          min={0}
-          required
-          placeholder="e.g. 5"
-          className="rounded-md border border-line bg-panel-2 px-2.5 py-2 text-sm text-t1 outline-none focus:border-accent"
-        />
-      </label>
-      <label className="flex w-28 flex-col gap-1">
-        <span className="text-xs uppercase tracking-wide text-t3">Unit</span>
-        <input
-          type="text"
-          name="unit"
-          defaultValue="mg/L"
-          maxLength={12}
-          className="rounded-md border border-line bg-panel-2 px-2.5 py-2 text-sm text-t1 outline-none focus:border-accent"
-        />
-      </label>
-    </div>
-  );
-}
+import type { CaptureRequest } from "@/lib/experiment-meta";
 
 export function StandardsStep({
   experimentId,
   standards,
   lambdaMax,
+  phoneOnline,
+  pending,
 }: {
   experimentId: string;
   standards: StandardAnalysis[];
   lambdaMax: number | null;
+  phoneOnline: boolean;
+  pending: CaptureRequest | null;
 }) {
   const enough = standards.length >= 2;
 
@@ -114,11 +90,13 @@ export function StandardsStep({
 
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold text-t1">Add a standard</h3>
-        <CapturePanel
+        <CaptureControls
           experimentId={experimentId}
           role="standard"
           cta="Capture standard"
-          extraFields={<ConcentrationFields />}
+          needsConcentration
+          phoneOnline={phoneOnline}
+          pending={pending}
         />
       </div>
     </div>

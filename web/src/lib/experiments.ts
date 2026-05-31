@@ -45,6 +45,26 @@ export function getExperiment(id: string, userId: string) {
   return prisma.experiment.findFirst({ where: { id, userId } });
 }
 
+/**
+ * Resolve an experiment from its (unexpired) join token — the phone's only key.
+ * Used by the token-authed phone routes (SSE, captures), which carry no user
+ * session. Returns null on unknown/expired token.
+ */
+export async function getExperimentByToken(id: string, token: string | null | undefined) {
+  if (!token) return null;
+  const exp = await prisma.experiment.findFirst({ where: { id, joinToken: token } });
+  if (!exp || joinTokenExpired(exp.joinTokenExpires)) return null;
+  return exp;
+}
+
+/** Resolve an experiment from just its join token (no id) — phone page entry. */
+export async function getExperimentByTokenOnly(token: string) {
+  if (!token) return null;
+  const exp = await prisma.experiment.findFirst({ where: { joinToken: token } });
+  if (!exp || joinTokenExpired(exp.joinTokenExpires)) return null;
+  return exp;
+}
+
 export function createExperiment(input: {
   userId: string;
   name: string;

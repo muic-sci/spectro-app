@@ -4,9 +4,10 @@
  * marked, the slope/intercept/R² readout, and a plain-language verdict.
  */
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
-import { CapturePanel } from "@/components/wizard/capture-panel";
+import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
 import type { Calibration, DataPoint } from "@/lib/analysis";
+import type { CaptureRequest } from "@/lib/experiment-meta";
 
 /** Plain-language verdict on the fit quality (web-ux-brief.md §5 L3.2). */
 function fitVerdict(rSquared: number): { tone: "ok" | "warn" | "danger"; text: string } {
@@ -21,11 +22,15 @@ export function CalibrationStep({
   calibration,
   profile,
   imageUrl,
+  phoneOnline,
+  pending,
 }: {
   experimentId: string;
   calibration: Calibration | null;
   profile: DataPoint[] | null;
   imageUrl?: string;
+  phoneOnline: boolean;
+  pending: CaptureRequest | null;
 }) {
   if (!calibration || !profile) {
     return (
@@ -37,7 +42,13 @@ export function CalibrationStep({
             emission lines and turn pixels into wavelengths.
           </p>
         </div>
-        <CapturePanel experimentId={experimentId} role="calibration" cta="Capture lamp" />
+        <CaptureControls
+          experimentId={experimentId}
+          role="calibration"
+          cta="Capture lamp"
+          phoneOnline={phoneOnline}
+          pending={pending}
+        />
       </div>
     );
   }
@@ -99,7 +110,13 @@ export function CalibrationStep({
       <details className="rounded-lg border border-line bg-panel p-4">
         <summary className="cursor-pointer text-sm text-t2">Re-capture the lamp</summary>
         <div className="mt-3">
-          <CapturePanel experimentId={experimentId} role="calibration" cta="Re-capture lamp" />
+          <CaptureControls
+            experimentId={experimentId}
+            role="calibration"
+            cta="Re-capture lamp"
+            phoneOnline={phoneOnline}
+            pending={pending}
+          />
         </div>
       </details>
     </div>

@@ -3,18 +3,23 @@
  * absorbance is measured against. We show its intensity profile once captured.
  */
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
-import { CapturePanel } from "@/components/wizard/capture-panel";
+import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, StatusChip } from "@/components/ui/primitives";
 import type { DataPoint } from "@/lib/analysis";
+import type { CaptureRequest } from "@/lib/experiment-meta";
 
 export function BlankStep({
   experimentId,
   profile,
   imageUrl,
+  phoneOnline,
+  pending,
 }: {
   experimentId: string;
   profile: DataPoint[] | null;
   imageUrl?: string;
+  phoneOnline: boolean;
+  pending: CaptureRequest | null;
 }) {
   if (!profile) {
     return (
@@ -26,7 +31,13 @@ export function BlankStep({
             100%-light reference.
           </p>
         </div>
-        <CapturePanel experimentId={experimentId} role="blank" cta="Capture blank" />
+        <CaptureControls
+          experimentId={experimentId}
+          role="blank"
+          cta="Capture blank"
+          phoneOnline={phoneOnline}
+          pending={pending}
+        />
       </div>
     );
   }
@@ -55,7 +66,13 @@ export function BlankStep({
       <details className="rounded-lg border border-line bg-panel p-4">
         <summary className="cursor-pointer text-sm text-t2">Re-capture the blank</summary>
         <div className="mt-3">
-          <CapturePanel experimentId={experimentId} role="blank" cta="Re-capture blank" />
+          <CaptureControls
+            experimentId={experimentId}
+            role="blank"
+            cta="Re-capture blank"
+            phoneOnline={phoneOnline}
+            pending={pending}
+          />
         </div>
       </details>
     </div>

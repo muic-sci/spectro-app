@@ -5,17 +5,22 @@
  */
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
-import { CapturePanel } from "@/components/wizard/capture-panel";
+import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
 import { deleteUnknownAction } from "@/app/experiments/[id]/actions";
 import type { DerivedAnalysis } from "@/lib/experiment-analysis";
+import type { CaptureRequest } from "@/lib/experiment-meta";
 
 export function UnknownStep({
   experimentId,
   derived,
+  phoneOnline,
+  pending,
 }: {
   experimentId: string;
   derived: DerivedAnalysis;
+  phoneOnline: boolean;
+  pending: CaptureRequest | null;
 }) {
   const { curve, lambdaMax, unknowns, standards } = derived;
   const unit = standards[0]?.unit;
@@ -106,7 +111,13 @@ export function UnknownStep({
         <h3 className="text-sm font-semibold text-t1">
           {unknowns.length > 0 ? "Measure another unknown" : "Capture your unknown"}
         </h3>
-        <CapturePanel experimentId={experimentId} role="unknown" cta="Capture unknown" />
+        <CaptureControls
+          experimentId={experimentId}
+          role="unknown"
+          cta="Capture unknown"
+          phoneOnline={phoneOnline}
+          pending={pending}
+        />
       </div>
     </div>
   );

@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUserId } from "@/auth-helpers";
 import { prisma } from "@/lib/db";
-import { modeMeta, WORKFLOW_STEPS } from "@/lib/experiment-meta";
+import { modeMeta, parseCaptureRequest, WORKFLOW_STEPS } from "@/lib/experiment-meta";
 import { parseRoi, parseProfile } from "@/lib/experiment-json";
 import { deriveAnalysis } from "@/lib/experiment-analysis";
+import { isPhoneOnline } from "@/lib/realtime";
+import { WizardLive } from "@/components/realtime/wizard-live";
 import { StepRail } from "@/components/wizard/step-rail";
 import { GuidancePanel } from "@/components/wizard/guidance-panel";
 import { WizardNav } from "@/components/wizard/wizard-nav";
@@ -16,7 +18,7 @@ import { AbsorbanceReviewStep } from "@/components/wizard/steps/absorbance-revie
 import { UnknownStep } from "@/components/wizard/steps/unknown-step";
 import { ResultsStep } from "@/components/wizard/steps/results-step";
 import { ComingSoonStep } from "@/components/wizard/steps/coming-soon-step";
-import { ConnBadge, Icon, SpectroMark, SpectrumBar, StatusChip } from "@/components/ui/primitives";
+import { Icon, SpectroMark, SpectrumBar, StatusChip } from "@/components/ui/primitives";
 import type { WorkflowStep } from "@/generated/prisma/enums";
 
 export const metadata = { title: "Wizard · Spectro Web" };
@@ -58,6 +60,9 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
   const calProfile = calImage ? parseProfile(calImage.intensityProfile) : null;
   const blankImage = experiment.images.find((im) => im.role === "blank");
 
+  const phoneOnline = isPhoneOnline(experiment.id);
+  const pending = parseCaptureRequest(experiment.pendingCapture);
+
   // Continue gating per step (web-ux-brief.md §8 state catalogue).
   let canContinue = true;
   let continueHint: string | undefined;
@@ -89,6 +94,8 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             calibration={derived.calibration}
             profile={calProfile}
             imageUrl={calImage?.url || undefined}
+            phoneOnline={phoneOnline}
+            pending={pending}
           />
         );
       case "blank":
@@ -97,6 +104,8 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             experimentId={experiment!.id}
             profile={derived.blankProfile}
             imageUrl={blankImage?.url || undefined}
+            phoneOnline={phoneOnline}
+            pending={pending}
           />
         );
       case "standards":
@@ -105,20 +114,27 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             experimentId={experiment!.id}
             standards={derived.standards}
             lambdaMax={derived.lambdaMax}
+            phoneOnline={phoneOnline}
+            pending={pending}
           />
         );
       case "absorbanceReview":
         return <AbsorbanceReviewStep experimentId={experiment!.id} derived={derived} />;
       case "unknown":
-        return <UnknownStep experimentId={experiment!.id} derived={derived} />;
+        return (
+          <UnknownStep
+            experimentId={experiment!.id}
+            derived={derived}
+            phoneOnline={phoneOnline}
+            pending={pending}
+          />
+        );
       case "results":
         return <ResultsStep experimentId={experiment!.id} derived={derived} />;
       default:
         return <ComingSoonStep label={currentMeta?.label ?? "This step"} />;
     }
   }
-
-  const phoneStatus = experiment.images.length > 0 ? "connected" : "offline";
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-5xl flex-col gap-6 px-6 py-10">
@@ -128,7 +144,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
           <h1 className="text-lg font-semibold text-t1">{experiment.name}</h1>
           <p className="text-sm text-t3">{modeMeta(experiment.mode).label}</p>
         </div>
-        <ConnBadge status={phoneStatus} />
+        <WizardLive experimentId={experiment.id} initialPhoneOnline={phoneOnline} />
       </header>
 
       <SpectrumBar height={8} />

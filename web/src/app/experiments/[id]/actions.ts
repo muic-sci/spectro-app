@@ -5,8 +5,10 @@ import { requireUserId } from "@/auth-helpers";
 import { getExperiment } from "@/lib/experiments";
 import { processCapture } from "@/lib/capture";
 import { deleteImageBytes } from "@/lib/storage";
+import { publish } from "@/lib/realtime";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
+import type { CaptureRequest } from "@/lib/experiment-meta";
 import type { SpectralImageRole, WorkflowStep } from "@/generated/prisma/enums";
 
 const CAPTURE_ROLES: SpectralImageRole[] = ["calibration", "blank", "standard", "unknown"];
@@ -61,6 +63,7 @@ export async function uploadCaptureAction(
   try {
     const bytes = Buffer.from(await file.arrayBuffer());
     const res = await processCapture({ experimentId: id, roi: experiment.roi, role, bytes, concentration, unit });
+    publish(id, { type: "captured", data: { role, saturatedPct: res.saturation.fraction * 100 } });
     revalidatePath(`/experiments/${id}`);
     return {
       ok: true,
@@ -156,11 +159,66 @@ export async function deleteUnknownAction(formData: FormData) {
   revalidatePath(`/experiments/${id}`);
 }
 
+// ── Cross-device capture requests (laptop drives the phone) ─────────────────
+
+/** Human prompt the phone shows for a requested capture. */
+function captureLabel(role: SpectralImageRole, concentration?: number, unit?: string): string {
+  switch (role) {
+    case "calibration":
+      return "Capture the lamp";
+    case "blank":
+      return "Capture the BLANK";
+    case "standard":
+      return `Capture standard${concentration ? ` (${concentration}${unit ? ` ${unit}` : ""})` : ""}`;
+    case "unknown":
+      return "Capture your unknown";
+  }
+}
+
+/** Ask the paired phone to take a specific capture (sets pendingCapture). */
+export async function requestCaptureAction(formData: FormData) {
+  const userId = await requireUserId();
+  const id = String(formData.get("experimentId") ?? "");
+  const role = String(formData.get("role") ?? "") as SpectralImageRole;
+  if (!["calibration", "blank", "standard", "unknown"].includes(role)) return;
+
+  let concentration: number | undefined;
+  let unit: string | undefined;
+  if (role === "standard") {
+    concentration = Number(formData.get("concentration"));
+    unit = String(formData.get("unit") ?? "").trim() || undefined;
+    if (!Number.isFinite(concentration) || concentration <= 0) return;
+  }
+
+  const request: CaptureRequest = {
+    role,
+    label: captureLabel(role, concentration, unit),
+    concentration,
+    unit,
+  };
+  await prisma.experiment.updateMany({
+    where: { id, userId },
+    data: { pendingCapture: request as unknown as Prisma.InputJsonValue },
+  });
+  publish(id, { type: "pending", data: request });
+  revalidatePath(`/experiments/${id}`);
+}
+
+/** Cancel an outstanding phone capture request. */
+export async function cancelCaptureAction(formData: FormData) {
+  const userId = await requireUserId();
+  const id = String(formData.get("experimentId") ?? "");
+  await prisma.experiment.updateMany({ where: { id, userId }, data: { pendingCapture: Prisma.DbNull } });
+  publish(id, { type: "pending", data: null });
+  revalidatePath(`/experiments/${id}`);
+}
+
 /** Move the wizard to a specific step (Back / Continue). */
 export async function goToStepAction(formData: FormData) {
   const userId = await requireUserId();
   const id = String(formData.get("experimentId") ?? "");
   const step = String(formData.get("step") ?? "") as WorkflowStep;
   await prisma.experiment.updateMany({ where: { id, userId }, data: { currentStep: step } });
+  publish(id, { type: "step", data: { step } });
   revalidatePath(`/experiments/${id}`);
 }
