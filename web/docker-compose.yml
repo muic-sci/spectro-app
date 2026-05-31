@@ -18,7 +18,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Dev SMTP inbox — magic-link emails land in the web UI at http://localhost:8025
+  # Dev SMTP inbox — password-reset emails land in the web UI at http://localhost:8025
   mailpit:
     image: axllent/mailpit:latest
     restart: unless-stopped

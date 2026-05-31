@@ -1,14 +1,13 @@
 // Spectro Web — Prisma 7 schema (PostgreSQL).
 //
 // Two concerns live here:
-//   1. Auth.js (NextAuth v5) tables via @auth/prisma-adapter — User/Account/
-//      Session/VerificationToken.
+//   1. Auth.js (NextAuth v5) with the Credentials provider + JWT sessions.
+//      We store the user + a bcrypt password hash ourselves (no adapter), plus
+//      a PasswordResetToken for self-service reset. There is no Account/Session/
+//      VerificationToken table — JWT sessions are stateless and there is no
+//      OAuth/magic-link.
 //   2. The spectro domain — a port of mobile/lib/data/models/project.dart,
 //      reframed as the two-device "Experiment" from web-refactor-plan.md §7.
-//
-// Naming note: the refactor plan calls the shared unit a "Session", but that
-// collides with Auth.js's own `Session`. We use `Experiment` for the domain
-// object (it owns the pairing/step state and all captures).
 
 generator client {
   provider = "prisma-client"
@@ -21,57 +20,33 @@ datasource db {
   provider = "postgresql"
 }
 
-// ── Auth.js (NextAuth) models ────────────────────────────────────────────────
+// ── Auth (credentials + JWT) models ──────────────────────────────────────────
 
 model User {
-  id            String       @id @default(cuid())
-  name          String?
-  email         String?      @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  experiments   Experiment[]
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id           String       @id @default(cuid())
+  name         String?
+  email        String       @unique
+  image        String?
+  /// bcrypt hash of the user's password (set at registration / reset).
+  passwordHash String?
+  experiments  Experiment[]
+  resetTokens  PasswordResetToken[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 }
 
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@index([userId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+/// A single-use, time-limited password-reset token. We store only a hash of the
+/// token (the raw value lives only in the emailed link), expire it after ~1h,
+/// and delete it once consumed.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expires   DateTime
+  createdAt DateTime @default(now())
 
   @@index([userId])
-}
-
-model VerificationToken {
-  identifier String
-  token      String
-  expires    DateTime
-
-  @@id([identifier, token])
 }
 
 // ── Spectro domain ───────────────────────────────────────────────────────────

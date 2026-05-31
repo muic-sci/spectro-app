@@ -1,42 +1,66 @@
 /**
- * Auth.js (NextAuth v5) — passwordless email magic-link + optional Google,
- * backed by the Prisma adapter and database sessions.
+ * Auth.js (NextAuth v5) — email + password via the Credentials provider,
+ * backed by our own User table (bcrypt hash) and stateless JWT sessions.
  *
- * Database sessions + the Prisma/pg adapter are not edge-compatible, so we do
- * NOT protect routes via edge middleware; instead call `auth()` in server
- * components / route handlers (see requireUser in ./auth-helpers).
+ * Why JWT (not database sessions): the Credentials provider is only supported
+ * with `strategy: "jwt"`. We carry the user id in the token and re-expose it on
+ * `session.user.id` so the rest of the app (requireUserId, owner-scoped queries)
+ * is unchanged. Registration / reset are handled by our own server actions, not
+ * by an adapter.
+ *
+ * JWT sessions are not edge-decoded here either — routes are still guarded
+ * per-request via requireUser() in ./auth-helpers.
  */
 import NextAuth from "next-auth";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import Nodemailer from "next-auth/providers/nodemailer";
-import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { verifyPassword } from "@/lib/password";
 
-// Wrap the typed Prisma client for the adapter (model names line up 1:1).
-const adapter = PrismaAdapter(prisma);
-
-const providers = [
-  Nodemailer({
-    server: process.env.EMAIL_SERVER,
-    from: process.env.EMAIL_FROM ?? "Spectro <no-reply@spectro.local>",
-  }),
-  // Enable Google only when credentials are configured.
-  ...(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET ? [Google] : []),
-];
+const credentialsSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter,
-  session: { strategy: "database" },
-  providers,
+  session: { strategy: "jwt" },
+  trustHost: true,
   pages: {
     signIn: "/login",
-    verifyRequest: "/login/verify",
   },
+  providers: [
+    Credentials({
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(raw) {
+        const parsed = credentialsSchema.safeParse(raw);
+        if (!parsed.success) return null;
+
+        const { email, password } = parsed.data;
+        const user = await prisma.user.findUnique({
+          where: { email: email.toLowerCase() },
+        });
+        if (!user?.passwordHash) return null;
+
+        const ok = await verifyPassword(password, user.passwordHash);
+        if (!ok) return null;
+
+        return { id: user.id, email: user.email, name: user.name };
+      },
+    }),
+  ],
   callbacks: {
-    // Database sessions: expose the adapter user's id on the session so server
-    // components / actions can scope queries to the owner (requireUserId).
-    session({ session, user }) {
-      if (session.user) session.user.id = user.id;
+    // Persist the user id on the token at sign-in.
+    jwt({ token, user }) {
+      if (user) token.sub = user.id;
+      return token;
+    },
+    // Re-expose the id on the session so server components / actions can scope
+    // queries to the owner (requireUserId).
+    session({ session, token }) {
+      if (session.user && token.sub) session.user.id = token.sub;
       return session;
     },
   },

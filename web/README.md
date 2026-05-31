@@ -15,7 +15,7 @@ machine).
 |---|---|
 | Framework | **Next.js 16** (App Router) · **React 19** |
 | UI | **HeroUI v3** components, re-skinned with the design-handoff dark OKLCH tokens (**Tailwind v4**) |
-| Auth | **Auth.js (NextAuth v5)** + `@auth/prisma-adapter` — email magic-link, optional Google |
+| Auth | **Auth.js (NextAuth v5)** Credentials provider — email + password (`bcryptjs`), JWT sessions; register + self-service reset |
 | DB | **Prisma 7** + **PostgreSQL** (via the `@prisma/adapter-pg` driver adapter) |
 | Image decode | **sharp** (libvips), server-only |
 | Analysis | **TypeScript port** of the Dart algorithms — `src/lib/analysis` |
@@ -40,7 +40,8 @@ npm run prisma:migrate     # or: npm run db:push
 npm run dev                # http://localhost:3000
 ```
 
-Magic-link emails land in Mailpit at <http://localhost:8025> in development.
+Register at `/login` → "Create an account". Password-reset emails (the only
+email the app sends) land in Mailpit at <http://localhost:8025> in development.
 
 ## Scripts
 
