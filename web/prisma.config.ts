@@ -3,6 +3,7 @@
 // the .env DATABASE_URL.
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
+import { resolveDatabaseUrl } from "./src/lib/database-url";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -10,6 +11,7 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env.DATABASE_URL,
+    // DATABASE_URL if set, else built from POSTGRES_* (see src/lib/database-url.ts).
+    url: resolveDatabaseUrl(),
   },
 });

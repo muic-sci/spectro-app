@@ -9,11 +9,10 @@
 import "server-only";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
+import { resolveDatabaseUrl } from "@/lib/database-url";
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error("DATABASE_URL is not set. Copy .env.example to .env and fill it in.");
-}
+// DATABASE_URL if set, else built from POSTGRES_* (see lib/database-url.ts).
+const connectionString = resolveDatabaseUrl();
 
 const adapter = new PrismaPg({ connectionString });
 

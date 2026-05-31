@@ -4,16 +4,17 @@ services:
   db:
     image: postgres:17
     restart: unless-stopped
+    # Same POSTGRES_* as .env so the app's built connection string matches.
     environment:
-      POSTGRES_USER: spectro
-      POSTGRES_PASSWORD: spectro
-      POSTGRES_DB: spectro
+      POSTGRES_USER: ${POSTGRES_USER:-spectro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-spectro}
+      POSTGRES_DB: ${POSTGRES_DB:-spectro}
     ports:
-      - "5433:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - spectro_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U spectro -d spectro"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-spectro} -d ${POSTGRES_DB:-spectro}"]
       interval: 10s
       timeout: 5s
       retries: 5

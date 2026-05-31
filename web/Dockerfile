@@ -65,6 +65,8 @@ COPY --from=builder /app/.next/static ./.next/static
 # node_modules (additive — the app's traced deps are untouched).
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+# prisma.config.ts imports this to build the connection string from POSTGRES_*.
+COPY --from=builder /app/src/lib/database-url.ts ./src/lib/database-url.ts
 COPY --from=prisma-cli /pcli/node_modules ./node_modules
 
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
