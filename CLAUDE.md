@@ -217,9 +217,14 @@ npm install
 docker compose up -d         # Postgres + Mailpit (dev mail inbox at :8025)
 cp .env.example .env         # then: npx auth secret  → AUTH_SECRET
 npm run prisma:migrate
-npm run dev                  # http://localhost:3000
+npm run dev                  # http://localhost:3000 (runs `prisma generate` first)
 npm test                     # vitest: analysis unit + golden-data tests
 ```
+> **Schema-change gotcha:** the Prisma client is cached in the running `next dev`
+> process, so after editing `schema.prisma` (+ `db push`) you must **restart the
+> dev server** — a mid-session `prisma generate` won't hot-reload, and writes to
+> the new column fail with `Unknown argument`. The `dev` script regenerates on
+> start, so a restart is always sufficient.
 
 ## Git Commit Convention
 All commits must follow [Conventional Commits](https://www.conventionalcommits.org/):
