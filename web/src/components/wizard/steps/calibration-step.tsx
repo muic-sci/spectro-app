@@ -69,6 +69,11 @@ export function CalibrationStep({
         <StatusChip tone="accent" mono>
           R² {calibration.rSquared.toFixed(4)}
         </StatusChip>
+        {calibration.slope < 0 && (
+          <StatusChip tone="accent">
+            <Icon name="arrowR" size={12} /> Auto-flipped (spectrum runs red→violet)
+          </StatusChip>
+        )}
       </div>
 
       <div className="rounded-lg border border-line bg-panel p-4">

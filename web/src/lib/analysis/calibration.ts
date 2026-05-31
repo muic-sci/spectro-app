@@ -90,11 +90,24 @@ export function pixelToWavelength(cal: Pick<Calibration, "slope" | "intercept">,
   return cal.slope * pixel + cal.intercept;
 }
 
-/** Convenience: lamp profile → full Calibration in one call. */
+/**
+ * Convenience: lamp profile → full Calibration in one call, with **automatic
+ * flip detection**.
+ *
+ * Peaks are detected in ascending pixel order, but we don't know whether the
+ * strip runs violet→red or red→violet. The lamp's lines are asymmetrically
+ * spaced (gaps ≈ 51.5, 58, 43, 24.5 nm), so the correct direction fits the
+ * known wavelengths markedly better. We try assigning the wavelengths both
+ * ascending and descending and keep whichever has the higher R² — so a flipped
+ * (red→violet) capture calibrates correctly (with a negative slope, which
+ * pixel→λ handles transparently downstream).
+ */
 export function calibrateFromLampProfile(
   profile: DataPoint[],
   knownWavelengths: readonly number[] = SpectralConstants.fluorescentLampPeaks,
 ): Calibration {
   const peaks = detectCalibrationPeaks(profile, { numPeaks: knownWavelengths.length });
-  return buildCalibration(peaks, knownWavelengths);
+  const forward = buildCalibration(peaks, knownWavelengths);
+  const reversed = buildCalibration(peaks, [...knownWavelengths].reverse());
+  return reversed.rSquared > forward.rSquared ? reversed : forward;
 }
