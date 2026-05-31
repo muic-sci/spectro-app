@@ -1,6 +1,8 @@
 # GitLab CI/CD for spectro-app
-# Builds and pushes the Flutter web Docker image to the GitLab Container Registry,
-# then triggers deployment via the webhook-with-curl server.
+# Builds and pushes the Spectro Web (Next.js) Docker image to the GitLab
+# Container Registry, then triggers deployment via the webhook-with-curl server.
+# The image applies Prisma migrations on boot and serves on :3000; the server
+# compose (docker/) also runs Postgres + a persistent uploads volume.
 #
 # Triggered only on tags matching vX.Y.Z (e.g. v1.0.0, v2.10.3).
 #
@@ -29,17 +31,17 @@ build-and-push:
     - docker info
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
   script:
-    # Pull :latest for layer caching (pub get layer is reused if pubspec unchanged).
-    # COPY . . is always a cache miss on new commits so RUN printf and flutter
-    # build always run fresh — --cache-from :latest is safe here.
+    # Pull :latest for layer caching (the npm-ci deps layer is reused while
+    # package-lock.json is unchanged).
     - docker pull $IMAGE_NAME:latest || true
     - docker build
         --cache-from $IMAGE_NAME:latest
+        --build-arg BUILDKIT_INLINE_CACHE=1
         --build-arg APP_VERSION=$CI_COMMIT_TAG
         --tag $IMAGE_NAME:$CI_COMMIT_TAG
         --tag $IMAGE_NAME:latest
-        -f docker/Dockerfile
-        .
+        -f web/Dockerfile
+        web
     - docker push $IMAGE_NAME:$CI_COMMIT_TAG
     - docker push $IMAGE_NAME:latest
   rules:

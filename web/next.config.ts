@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Self-contained server build for Docker: `.next/standalone` ships a minimal
+  // node_modules + server.js so the runtime image stays small.
+  output: "standalone",
   // sharp is a native dep used only in server-side analysis route handlers /
   // server actions. Keep it external so Next doesn't try to bundle the binary.
   serverExternalPackages: ["sharp"],

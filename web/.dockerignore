@@ -1,0 +1,15 @@
+# Build context is web/. Keep the image lean and deterministic.
+node_modules
+.next
+storage
+.env
+.env.*
+!.env.example
+npm-debug.log*
+.DS_Store
+.git
+.idea
+.vscode
+test
+vitest.config.ts
+README.md

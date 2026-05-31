@@ -9,7 +9,9 @@
 # Prerequisites on the server:
 #   - Docker + Compose plugin installed and the user in the docker group
 #   - docker login <registry> already run (or credentials in ~/.docker/config.json)
-#   - $DEPLOY_DIR contains docker-compose.yml and .env
+#   - $DEPLOY_DIR contains docker-compose.yml and .env (the rsync'd docker/ folder)
+#   - the external `nginx-proxy` network exists: docker network create nginx-proxy
+#   - DB migrations apply automatically when the app container boots (no manual step)
 
 set -euo pipefail
 

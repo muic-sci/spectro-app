@@ -16,18 +16,18 @@ spectro-app/
 │                 # "brain": guidance, ROI, charts, analysis, results, export.
 ├── docs/         # web-refactor-plan.md, web-ux-brief.md, design_handoff_continuous_camera/
 ├── materials/    # reference paper + the 002 sample dataset (golden test source)
-└── docker/, .gitlab-ci.yml  # build/deploy the Flutter web target from mobile/
+└── docker/, .gitlab-ci.yml  # build/deploy the **web/** image (Next.js + Postgres) on vX.Y.Z tags
 ```
 
 **Why:** running the full analytical workflow on a phone is awkward. The web app guides + analyses on a laptop; the phone, paired via QR, is a focus-locked camera that uploads photos. See `docs/web-refactor-plan.md` and `docs/web-ux-brief.md`. **The two apps share no code** — the web app re-ports the science (see below), it does not import Dart.
 
 ### web (foundation pass — done)
-- **Stack:** Next.js 16 (App Router), React 19, TypeScript, Tailwind v4 + **HeroUI v3**, Auth.js v5 (`next-auth@beta`) + `@auth/prisma-adapter`, **Prisma 7** + PostgreSQL (`@prisma/adapter-pg`), `sharp`, Recharts, Vitest.
+- **Stack:** Next.js 16 (App Router), React 19, TypeScript, Tailwind v4 + **HeroUI v3**, Auth.js v5 (`next-auth@beta`) with the **Credentials provider** + `bcryptjs`, **Prisma 7** + PostgreSQL (`@prisma/adapter-pg`), `sharp`, Recharts, Vitest.
 - **Theme = the "middle ground":** HeroUI components, re-skinned by overriding HeroUI's semantic CSS tokens (`--background`, `--surface`, `--accent`, …) with the design handoff's dark OKLCH palette in `web/src/app/globals.css`; the signature scientific bits (logo, spectrum bar, ConnBadge, StatusChip, Readout) are ported primitives in `web/src/components/ui/primitives.tsx`. Dark-only (`.dark` always on `<html>`) — an experimental requirement.
 - **Analysis core:** `web/src/lib/analysis/` is a faithful TS port of `mobile/lib/core` behind one module seam (swappable for a Python sidecar later). Pinned by `web/test/analysis.{unit,golden}.test.ts` against the `materials/002` 550×60 dataset.
   - **Decoder caveat:** the web port decodes with `sharp().rotate()` (EXIF auto-orient) to match the Dart `image` package — omitting `.rotate()` mirrors the spectrum (wavelength axis reversed). sharp and Dart `image` still differ at the sub-peak level, so on the 002 lamp image the two mercury blue lines (434.5/486 nm) nearly merge and the calibration is softer than the Dart-documented R²>0.999 (web gets slope≈0.477, intercept≈392, R²≈0.946). The golden test pins the **decoder-robust science** (λmax≈578 nm, absorbance rising with concentration, Beer-Lambert R²>0.99) tightly and the calibration as a structural+snapshot anchor.
-- **Data model:** `web/prisma/schema.prisma` — Auth.js tables + a spectro domain that ports `project.dart`. The shared two-device unit is `Experiment` (named to avoid colliding with Auth.js `Session`); it owns pairing/step state, `roi`, `calibration` (Json), and `SpectralImage`/`Standard`/`Unknown` rows.
-- **Auth:** email magic-link (Nodemailer) + optional Google; database sessions (not edge-safe), so routes are guarded per-request via `requireUser()` / `requireUserId()` (the latter exposes the owner id, attached to the session by the `session` callback in `auth.ts`) rather than middleware.
+- **Data model:** `web/prisma/schema.prisma` — `User` (with `passwordHash`) + `PasswordResetToken` + a spectro domain that ports `project.dart`. The shared two-device unit is `Experiment`; it owns pairing/step state, `roi`, `calibration` (Json), and `SpectralImage`/`Standard`/`Unknown` rows. **No Auth.js adapter tables** (Account/Session/VerificationToken) — sessions are stateless JWTs. **Migrations live in `web/prisma/migrations/`** (baseline `init`); prod runs `prisma migrate deploy`, dev runs `prisma migrate dev`.
+- **Auth:** **email + password** via the Auth.js **Credentials** provider, hashed with `bcryptjs` (`web/src/lib/password.ts`), **JWT sessions** (`strategy: "jwt"`, `trustHost: true`; Credentials can't use database sessions). The user id is carried on the token and re-exposed as `session.user.id` by the `jwt`+`session` callbacks in `auth.ts`, so `requireUser()` / `requireUserId()` (`web/src/auth-helpers.ts`) and all owner-scoped queries are unchanged. Flow pages: `/login`, `/register` (immediate sign-in, no email verification), `/forgot-password` + `/reset-password?token=…` (single-use hashed token, 1 h TTL, `web/src/lib/auth-tokens.ts`). **Email is used only for the reset link** (`web/src/lib/mail.ts`, Nodemailer over `EMAIL_SERVER`); magic-link/Google are gone.
 - **Guided wizard (in progress):** the laptop flow L0 → L1 → L2 is built.
   - `L0` `/experiments` — list/create/delete experiments (server component + server actions).
   - `L1` `/experiments/new` — setup form: name + mode + reference light (client `NewExperimentForm` via `useActionState`); on submit `createExperimentAction` mints a join token and redirects to pairing.
@@ -215,17 +215,38 @@ A **real phone** is required for full camera functionality (focus lock, QR scan,
 ```bash
 cd web
 npm install
-docker compose up -d         # Postgres + Mailpit (dev mail inbox at :8025)
+docker compose up -d         # Postgres + Mailpit (dev inbox at :8025 — reset emails)
 cp .env.example .env         # then: npx auth secret  → AUTH_SECRET
-npm run prisma:migrate
+npm run prisma:migrate       # applies prisma/migrations (creates them in dev)
 npm run dev                  # http://localhost:3000 (runs `prisma generate` first)
 npm test                     # vitest: analysis unit + golden-data tests
 ```
 > **Schema-change gotcha:** the Prisma client is cached in the running `next dev`
-> process, so after editing `schema.prisma` (+ `db push`) you must **restart the
+> process, so after editing `schema.prisma` (+ a migration) you must **restart the
 > dev server** — a mid-session `prisma generate` won't hot-reload, and writes to
 > the new column fail with `Unknown argument`. The `dev` script regenerates on
 > start, so a restart is always sufficient.
+
+### Deploy (Docker, web/) — tag → GitLab CI → webhook → server
+Release flow (unchanged shape, now ships **web/** not Flutter): push a `vX.Y.Z`
+tag → `.gitlab-ci.yml` builds `web/Dockerfile` (context `web`) + pushes to the
+GitLab registry → HMAC webhook → the server's `docker/cron-deploy.sh` (cron)
+pulls the new tag and runs `docker compose up -d`. The image is Next.js
+**standalone**; its entrypoint (`web/docker-entrypoint.sh`) runs **`prisma
+migrate deploy`** on boot, then serves on **:3000** behind nginx-proxy.
+- **`docker/docker-compose.yml`** runs two services: `db` (postgres:17, `pgdata`
+  volume) + `app` (image, `uploads:/data/uploads` volume, `VIRTUAL_PORT=3000`).
+  The `docker/` folder is **rsync'd** to the server; `.env` is **server-managed**
+  (keep it out of the sync) and supplies every `${VAR}` — see `docker/.env.example`.
+- **Server setup checklist:** DNS A-record; nginx-proxy + acme-companion on an
+  external `nginx-proxy` network (`docker network create nginx-proxy`); a deploy
+  dir holding the synced compose + `.env` with `POSTGRES_*` / `DATABASE_URL`
+  (host `db`) / `AUTH_SECRET` (`openssl rand -base64 33`) / `AUTH_URL=https://…`
+  / **real SMTP** `EMAIL_SERVER`+`EMAIL_FROM` (password reset) / `VIRTUAL_HOST` /
+  `LETSENCRYPT_HOST` / `SPECTRO_APP_IMAGE`; `docker login` to the registry (deploy
+  token) for cron pulls; `cron-deploy.sh` in crontab; GitLab CI vars
+  `DEPLOY_WEBHOOK_SECRET` + `DEPLOY_WEBHOOK_URL`; back up the `pgdata` volume.
+- **`docker/deploy.sh`** is a manual SSH fallback (build → save → load → compose up).
 
 ## Git Commit Convention
 All commits must follow [Conventional Commits](https://www.conventionalcommits.org/):
