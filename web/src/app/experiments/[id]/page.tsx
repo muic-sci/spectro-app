@@ -3,53 +3,26 @@ import { notFound } from "next/navigation";
 import { requireUserId } from "@/auth-helpers";
 import { prisma } from "@/lib/db";
 import { modeMeta, WORKFLOW_STEPS } from "@/lib/experiment-meta";
+import { parseRoi, parseProfile } from "@/lib/experiment-json";
+import { deriveAnalysis } from "@/lib/experiment-analysis";
 import { StepRail } from "@/components/wizard/step-rail";
 import { GuidancePanel } from "@/components/wizard/guidance-panel";
 import { WizardNav } from "@/components/wizard/wizard-nav";
-import { RoiStep, type Roi } from "@/components/wizard/steps/roi-step";
+import { RoiStep } from "@/components/wizard/steps/roi-step";
 import { CalibrationStep } from "@/components/wizard/steps/calibration-step";
+import { BlankStep } from "@/components/wizard/steps/blank-step";
+import { StandardsStep } from "@/components/wizard/steps/standards-step";
 import { ComingSoonStep } from "@/components/wizard/steps/coming-soon-step";
 import { ConnBadge, Icon, SpectroMark, SpectrumBar, StatusChip } from "@/components/ui/primitives";
-import type { Calibration, DataPoint } from "@/lib/analysis";
 import type { WorkflowStep } from "@/generated/prisma/enums";
 
 export const metadata = { title: "Wizard · Spectro Web" };
 
-// ── small JSON parsers for the Prisma Json columns ──────────────────────────
-function parseRoi(j: unknown): Roi | null {
-  if (j && typeof j === "object") {
-    const r = j as Record<string, unknown>;
-    if (
-      typeof r.left === "number" &&
-      typeof r.top === "number" &&
-      typeof r.width === "number" &&
-      typeof r.height === "number"
-    ) {
-      return { left: r.left, top: r.top, width: r.width, height: r.height };
-    }
-  }
-  return null;
-}
-
-function parseCalibration(j: unknown): Calibration | null {
-  if (j && typeof j === "object" && "slope" in j && "peaks" in j) {
-    return j as unknown as Calibration;
-  }
-  return null;
-}
-
-function parseProfile(j: unknown): DataPoint[] | null {
-  if (j && typeof j === "object") {
-    const points = (j as Record<string, unknown>).points;
-    if (Array.isArray(points)) return points as DataPoint[];
-  }
-  return null;
-}
-
 /**
  * L3 — the wizard shell. Persistent frame (step rail + guidance + canvas + nav)
  * that renders the canvas for the experiment's current step. Capture-bearing
- * steps run through the shared pipeline (lib/capture).
+ * steps run through the shared pipeline (lib/capture); the later steps render
+ * the in-memory analysis (lib/experiment-analysis).
  */
 export default async function WizardPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -59,8 +32,8 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
     where: { id, userId },
     include: {
       images: { orderBy: { capturedAt: "desc" } },
-      standards: true,
-      unknowns: true,
+      standards: { include: { image: true } },
+      unknowns: { include: { image: true } },
     },
   });
   if (!experiment) notFound();
@@ -70,17 +43,29 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
     experiment.currentStep === "experimentSetup" ? "cameraRoiSetup" : experiment.currentStep;
   const currentMeta = WORKFLOW_STEPS.find((s) => s.value === currentStep);
 
-  const calibration = parseCalibration(experiment.calibration);
+  const derived = deriveAnalysis({
+    calibration: experiment.calibration,
+    images: experiment.images,
+    standards: experiment.standards,
+    unknowns: experiment.unknowns,
+  });
+
   const calImage = experiment.images.find((im) => im.role === "calibration");
   const calProfile = calImage ? parseProfile(calImage.intensityProfile) : null;
   const blankImage = experiment.images.find((im) => im.role === "blank");
 
-  // Continue gating per step.
+  // Continue gating per step (web-ux-brief.md §8 state catalogue).
   let canContinue = true;
   let continueHint: string | undefined;
-  if (currentStep === "calibration" && !calibration) {
+  if (currentStep === "calibration" && !derived.calibration) {
     canContinue = false;
     continueHint = "Capture the lamp to continue";
+  } else if (currentStep === "blank" && !blankImage) {
+    canContinue = false;
+    continueHint = "Capture the blank to continue";
+  } else if (currentStep === "standards" && derived.standards.length < 2) {
+    canContinue = false;
+    continueHint = "Add at least 2 standards to continue";
   }
 
   function renderCanvas() {
@@ -91,9 +76,25 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
         return (
           <CalibrationStep
             experimentId={experiment!.id}
-            calibration={calibration}
+            calibration={derived.calibration}
             profile={calProfile}
             imageUrl={calImage?.url || undefined}
+          />
+        );
+      case "blank":
+        return (
+          <BlankStep
+            experimentId={experiment!.id}
+            profile={derived.blankProfile}
+            imageUrl={blankImage?.url || undefined}
+          />
+        );
+      case "standards":
+        return (
+          <StandardsStep
+            experimentId={experiment!.id}
+            standards={derived.standards}
+            lambdaMax={derived.lambdaMax}
           />
         );
       default:
@@ -101,7 +102,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
     }
   }
 
-  const phoneStatus = blankImage || calImage ? "connected" : "offline";
+  const phoneStatus = experiment.images.length > 0 ? "connected" : "offline";
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-5xl flex-col gap-6 px-6 py-10">

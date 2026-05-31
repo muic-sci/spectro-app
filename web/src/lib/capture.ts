@@ -17,25 +17,10 @@ import {
   calibrateFromLampProfile,
   DEFAULT_ROI,
 } from "@/lib/analysis";
-import type { Calibration, Rect, SaturationResult } from "@/lib/analysis";
+import type { Calibration, SaturationResult } from "@/lib/analysis";
 import { saveImageBytes, deleteImageBytes } from "@/lib/storage";
+import { parseRoi } from "@/lib/experiment-json";
 import type { SpectralImageRole } from "@/generated/prisma/enums";
-
-/** Parse the experiment's stored ROI JSON, falling back to the full frame. */
-export function parseRoi(roi: unknown): Rect {
-  if (roi && typeof roi === "object") {
-    const r = roi as Record<string, unknown>;
-    if (
-      typeof r.left === "number" &&
-      typeof r.top === "number" &&
-      typeof r.width === "number" &&
-      typeof r.height === "number"
-    ) {
-      return { left: r.left, top: r.top, width: r.width, height: r.height };
-    }
-  }
-  return DEFAULT_ROI;
-}
 
 export interface CaptureResult {
   imageId: string;
@@ -56,7 +41,7 @@ export async function processCapture(opts: {
   unit?: string;
 }): Promise<CaptureResult> {
   const raster = await decodeImage(opts.bytes);
-  const roi = parseRoi(opts.roi);
+  const roi = parseRoi(opts.roi) ?? DEFAULT_ROI;
   // Max-channel keeps the blue lamp lines detectable; luminance for everything
   // else (CLAUDE.md "Intensity extraction method").
   const useMaxChannel = opts.role === "calibration";

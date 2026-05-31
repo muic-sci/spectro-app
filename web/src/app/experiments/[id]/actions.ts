@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireUserId } from "@/auth-helpers";
 import { getExperiment } from "@/lib/experiments";
 import { processCapture } from "@/lib/capture";
+import { deleteImageBytes } from "@/lib/storage";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
 import type { SpectralImageRole, WorkflowStep } from "@/generated/prisma/enums";
@@ -94,6 +95,28 @@ export async function setRoiAction(formData: FormData) {
   }
 
   await prisma.experiment.updateMany({ where: { id, userId }, data: { roi } });
+  revalidatePath(`/experiments/${id}`);
+}
+
+/** L3.4 — remove a standard (and its captured image binary). */
+export async function deleteStandardAction(formData: FormData) {
+  const userId = await requireUserId();
+  const id = String(formData.get("experimentId") ?? "");
+  const standardId = String(formData.get("standardId") ?? "");
+  if (!id || !standardId) return;
+
+  // Ownership: the standard must belong to an experiment owned by this user.
+  const standard = await prisma.standard.findFirst({
+    where: { id: standardId, experiment: { id, userId } },
+    select: { id: true, imageId: true },
+  });
+  if (!standard) return;
+
+  await prisma.standard.delete({ where: { id: standard.id } });
+  if (standard.imageId) {
+    await deleteImageBytes(standard.imageId);
+    await prisma.spectralImage.deleteMany({ where: { id: standard.imageId } });
+  }
   revalidatePath(`/experiments/${id}`);
 }
 
