@@ -57,7 +57,10 @@ services:
       # SPECTRO_STORAGE_DIR (kept in sync with the env var above). Relative host
       # paths resolve against this compose file's directory.
       - ${UPLOADS_DIR:-./uploads}:${SPECTRO_STORAGE_DIR:-/data/uploads}
-    # The reverse proxy is connected MANUALLY after `up`, not via compose:
-    #   docker network connect nginx-docker $(docker compose ps -q app)
+    # The reverse proxy is wired out-of-band, not via compose: connect your
+    # nginx-proxy CONTAINER to THIS app's network (compose recreates that network
+    # each `up`). cron-deploy.sh does this automatically when PROXY_CONTAINER is
+    # set; by hand it's e.g.:
+    #   docker network connect <deploy-dir>_default nginx-proxy
     # (VIRTUAL_HOST / VIRTUAL_PORT / LETSENCRYPT_HOST above are read by the proxy
-    # once the app shares its network.)
+    # once it shares the app's network.)

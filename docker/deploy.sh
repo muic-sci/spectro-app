@@ -49,8 +49,8 @@ docker load < $ARCHIVE
 echo "--> Starting containers (db migrations run on app boot)"
 docker compose --env-file .env up -d --remove-orphans
 
-echo "--> Connect the app to your reverse-proxy network manually, e.g.:"
-echo "      docker network connect nginx-docker \$(docker compose ps -q app)"
+echo "--> Connect your nginx-proxy CONTAINER to the app's network, e.g.:"
+echo "      docker network connect ${REMOTE_DIR##*/}_default nginx-proxy"
 
 echo "--> Done"
 docker compose ps

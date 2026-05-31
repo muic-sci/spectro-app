@@ -11,7 +11,8 @@
 #   - docker login <registry> already run (or credentials in ~/.docker/config.json)
 #   - $DEPLOY_DIR contains docker-compose.yml and .env (the rsync'd docker/ folder)
 #   - the reverse proxy is connected out-of-band (compose does not manage it);
-#     set PROXY_NETWORK in .env to have this script re-attach it after each deploy
+#     set PROXY_CONTAINER in .env to have this script re-attach the proxy to the
+#     app's network after each deploy
 #   - DB migrations apply automatically when the app container boots (no manual step)
 
 set -euo pipefail
@@ -78,14 +79,18 @@ docker compose pull                    >> "$LOG_FILE" 2>&1
 docker compose down                    >> "$LOG_FILE" 2>&1
 docker compose --env-file .env up -d   >> "$LOG_FILE" 2>&1
 
-# The reverse-proxy network is connected manually (not via compose), so `down`
-# drops it on every release. Re-attach it here if PROXY_NETWORK is set in .env.
-PROXY_NETWORK=$(grep -E '^PROXY_NETWORK=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")
-if [[ -n "$PROXY_NETWORK" ]]; then
+# nginx-proxy routes to this app only when they share a network. `down` recreates
+# the app's compose network every release, so re-attach the (stable) proxy
+# container to the app's (new) network here. Set PROXY_CONTAINER in .env to your
+# nginx-proxy container name (blank to skip and wire the proxy by hand).
+PROXY_CONTAINER=$(grep -E '^PROXY_CONTAINER=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")
+if [[ -n "$PROXY_CONTAINER" ]]; then
     app_cid=$(docker compose ps -q app)
-    docker network connect "$PROXY_NETWORK" "$app_cid" >> "$LOG_FILE" 2>&1 \
-        && log "Connected app to $PROXY_NETWORK" \
-        || log "Note: could not connect app to $PROXY_NETWORK (already attached?)"
+    app_net=$(docker inspect "$app_cid" \
+        --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{"\n"}}{{end}}' | head -n1)
+    docker network connect "$app_net" "$PROXY_CONTAINER" >> "$LOG_FILE" 2>&1 \
+        && log "Connected $PROXY_CONTAINER to $app_net" \
+        || log "Note: could not connect $PROXY_CONTAINER to $app_net (already attached?)"
 fi
 
 echo "$new_tag" > "$DEPLOYED_FILE"
