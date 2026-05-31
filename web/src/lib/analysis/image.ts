@@ -28,23 +28,31 @@ function clampInt(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-interface RoiBounds {
+export interface RoiBounds {
   x0: number;
   x1: number;
   y0: number;
   y1: number;
 }
 
-/** Clamp an ROI (left/top/width/height) to the image, returning pixel bounds. */
-function roiBounds(img: RasterImage, roi: Rect): RoiBounds {
+/**
+ * Clamp an ROI to an image of the given size, returning pixel bounds. Exported
+ * so the crop endpoint can extract *exactly* the region the analysis profiles
+ * (no divergence between "what was analysed" and "what's shown cropped").
+ */
+export function roiPixelBounds(imgWidth: number, imgHeight: number, roi: Rect): RoiBounds {
   const right = roi.left + roi.width;
   const bottom = roi.top + roi.height;
   return {
-    x0: clampInt(Math.round(roi.left), 0, img.width - 1),
-    x1: clampInt(Math.round(right), 0, img.width),
-    y0: clampInt(Math.round(roi.top), 0, img.height - 1),
-    y1: clampInt(Math.round(bottom), 0, img.height),
+    x0: clampInt(Math.round(roi.left), 0, imgWidth - 1),
+    x1: clampInt(Math.round(right), 0, imgWidth),
+    y0: clampInt(Math.round(roi.top), 0, imgHeight - 1),
+    y1: clampInt(Math.round(bottom), 0, imgHeight),
   };
+}
+
+function roiBounds(img: RasterImage, roi: Rect): RoiBounds {
+  return roiPixelBounds(img.width, img.height, roi);
 }
 
 /**

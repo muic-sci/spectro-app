@@ -66,6 +66,10 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const calProfile = calImage ? parseProfile(calImage.intensityProfile) : null;
   const blankImage = experiment.images.find((im) => im.role === "blank");
   const roi = parseRoi(experiment.roi);
+
+  // Cropped-to-ROI image URL (exactly what was analysed); ?v= busts on ROI change.
+  const version = experiment.updatedAt.getTime();
+  const cropped = (url: string) => `${url}/cropped?v=${version}`;
   const unit = derived.standards[0]?.unit;
   const { calibration, curve, lambdaMax } = derived;
 
@@ -151,6 +155,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
                 {roi ? `ROI ${roi.width}×${roi.height} px` : "full strip"}
               </p>
             </div>
+            <ImageStrip src={cropped(calImage.url)} label="Region analysed (cropped)" />
             {calibration && (
               <div className="grid flex-1 grid-cols-2 content-start gap-4">
                 <Readout label="Slope" value={calibration.slope.toFixed(3)} unit="nm/px" />
@@ -175,7 +180,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
       {blankImage && derived.blankProfile && (
         <Section title="2 · Blank (I₀)">
           <div className="flex flex-wrap items-start gap-5">
-            <ImageStrip src={blankImage.url} label="Blank capture" />
+            <ImageStrip src={cropped(blankImage.url)} label="Blank (cropped)" />
             <div className="min-w-[260px] flex-1 rounded-lg border border-line bg-panel p-4">
               <SpectrumChart points={derived.blankProfile} xLabel="pixel column" yLabel="intensity" yPrecision={0} height={200} />
             </div>
@@ -189,7 +194,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
           <div className="flex flex-wrap gap-4">
             {derived.standards.map((s) => (
               <div key={s.id} className="flex flex-col gap-1">
-                {s.imageUrl && <ImageStrip src={s.imageUrl} label={`${s.concentration} ${s.unit} · A=${s.absorbanceAtLambdaMax?.toFixed(3) ?? "—"}`} />}
+                {s.imageUrl && <ImageStrip src={cropped(s.imageUrl)} label={`${s.concentration} ${s.unit} · A=${s.absorbanceAtLambdaMax?.toFixed(3) ?? "—"}`} />}
               </div>
             ))}
           </div>
@@ -219,7 +224,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
         <Section title="4 · Unknown samples">
           {derived.unknowns.map((u, i) => (
             <div key={u.id} className="flex flex-wrap items-start gap-5 rounded-lg border border-line bg-panel p-4">
-              {u.imageUrl && <ImageStrip src={u.imageUrl} label={`Unknown #${i + 1}`} />}
+              {u.imageUrl && <ImageStrip src={cropped(u.imageUrl)} label={`Unknown #${i + 1} (cropped)`} />}
               {u.spectrum && (
                 <div className="min-w-[240px] flex-1">
                   <SpectrumChart

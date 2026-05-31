@@ -61,6 +61,7 @@ export function RoiStep({
   roi,
   orientation,
   calibrationImageUrl,
+  version,
   phoneOnline,
   pending,
 }: {
@@ -68,6 +69,8 @@ export function RoiStep({
   roi: Roi | null;
   orientation: Orientation;
   calibrationImageUrl: string | null;
+  /** Cache-buster (experiment.updatedAt) so the cropped preview refreshes on ROI change. */
+  version: number;
   phoneOnline: boolean;
   pending: CaptureRequest | null;
 }) {
@@ -101,6 +104,20 @@ export function RoiStep({
         initialRoi={roi}
         orientation={orientation}
       />
+
+      <div className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-4">
+        <h3 className="text-sm font-semibold text-t1">Region used for analysis</h3>
+        <p className="text-xs text-t3">
+          This is exactly the cropped area the analysis reads. If it isn&apos;t your spectrum strip,
+          re-draw the box above and save again.
+        </p>
+        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic owner-scoped blob */}
+        <img
+          src={`${calibrationImageUrl}/cropped?v=${version}`}
+          alt="Cropped analysis region"
+          className="max-h-32 w-auto self-start rounded border border-line bg-black"
+        />
+      </div>
 
       <details className="rounded-lg border border-line bg-panel p-4">
         <summary className="cursor-pointer text-sm text-t2">Re-capture the lamp</summary>
