@@ -9,6 +9,7 @@ import { deriveAnalysis } from "@/lib/experiment-analysis";
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
 import { AbsorbanceChart, type AbsorbanceSeries } from "@/components/charts/absorbance-chart";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
+import { AlignedLampStrip } from "@/components/wizard/aligned-lamp-strip";
 import { PrintButton } from "@/components/report/print-button";
 import { RoiPreview } from "@/components/report/roi-preview";
 import { Readout, SpectroMark, SpectrumBar, StatusChip } from "@/components/ui/primitives";
@@ -172,6 +173,15 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
                 Lamp intensity profile; dashed lines are the detected emission peaks (nm).
               </p>
             </div>
+          )}
+          {calProfile && calibration && (
+            <AlignedLampStrip
+              imageUrl={cropped(calImage.url)}
+              peaks={calibration.peaks}
+              minX={calProfile[0]?.x ?? 0}
+              maxX={calProfile[calProfile.length - 1]?.x ?? 1}
+              orientation={experiment.orientation}
+            />
           )}
         </Section>
       )}

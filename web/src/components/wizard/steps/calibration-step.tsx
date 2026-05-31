@@ -5,6 +5,7 @@
  */
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
 import { CaptureControls } from "@/components/wizard/capture-controls";
+import { AlignedLampStrip } from "@/components/wizard/aligned-lamp-strip";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
 import type { Calibration, DataPoint } from "@/lib/analysis";
 import type { CaptureRequest } from "@/lib/experiment-meta";
@@ -22,6 +23,8 @@ export function CalibrationStep({
   calibration,
   profile,
   imageUrl,
+  version,
+  orientation,
   phoneOnline,
   pending,
 }: {
@@ -29,6 +32,8 @@ export function CalibrationStep({
   calibration: Calibration | null;
   profile: DataPoint[] | null;
   imageUrl?: string;
+  version: number;
+  orientation: "horizontal" | "vertical";
   phoneOnline: boolean;
   pending: CaptureRequest | null;
 }) {
@@ -88,6 +93,16 @@ export function CalibrationStep({
           Dashed lines = detected peaks, labelled with their known wavelength (nm).
         </p>
       </div>
+
+      {imageUrl && (
+        <AlignedLampStrip
+          imageUrl={`${imageUrl}/cropped?v=${version}`}
+          peaks={calibration.peaks}
+          minX={profile[0]?.x ?? 0}
+          maxX={profile[profile.length - 1]?.x ?? 1}
+          orientation={orientation}
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-5 rounded-lg border border-line bg-panel p-5 sm:grid-cols-4">
         <Readout label="Slope" value={calibration.slope.toFixed(3)} unit="nm/px" />

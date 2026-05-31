@@ -107,6 +107,8 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             calibration={derived.calibration}
             profile={calProfile}
             imageUrl={calImage?.url || undefined}
+            version={experiment!.updatedAt.getTime()}
+            orientation={experiment!.orientation}
             phoneOnline={phoneOnline}
             pending={pending}
           />
