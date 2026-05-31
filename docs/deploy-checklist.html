@@ -42,9 +42,11 @@
   li.done .text label { color: var(--t3); text-decoration: line-through; }
   .desc { color: var(--t3); font-size: 12.5px; margin-top: 3px; }
   .cmd { position: relative; margin-top: 9px; }
-  pre { margin: 0; background: var(--code-bg); border: 1px solid var(--line);
-    border-radius: 8px; padding: 11px 40px 11px 13px; overflow-x: auto;
-    font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #cde3ff; }
+  .cmd pre { margin: 0; background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 11px 40px 11px 13px; overflow-x: auto; cursor: pointer;
+    font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #cde3ff;
+    transition: border-color .15s, box-shadow .15s; }
+  .cmd:hover pre { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .copy { position: absolute; top: 7px; right: 7px; background: var(--panel2);
     border: 1px solid var(--line); color: var(--t2); border-radius: 6px;
     font-size: 11px; padding: 3px 8px; cursor: pointer; }
@@ -183,13 +185,14 @@ document.addEventListener("change", e => {
   }
 });
 document.addEventListener("click", e => {
-  if (e.target.matches(".copy")){
-    const code = e.target.previousElementSibling.innerText;
-    navigator.clipboard.writeText(code).then(() => {
-      e.target.textContent = "copied"; e.target.classList.add("copied");
-      setTimeout(() => { e.target.textContent = "copy"; e.target.classList.remove("copied"); }, 1200);
-    });
-  }
+  const cmd = e.target.closest(".cmd");
+  if (!cmd) return;                       // click anywhere on the code block to copy
+  const code = cmd.querySelector("code").innerText;
+  const btn = cmd.querySelector(".copy");
+  navigator.clipboard.writeText(code).then(() => {
+    btn.textContent = "copied"; btn.classList.add("copied");
+    setTimeout(() => { btn.textContent = "copy"; btn.classList.remove("copied"); }, 1200);
+  });
 });
 function resetAll(){
   if (!confirm("Clear all ticks?")) return;
