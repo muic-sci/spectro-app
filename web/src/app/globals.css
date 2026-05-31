@@ -159,6 +159,21 @@ body {
   background: var(--accent-glow);
 }
 
+/* Report printing: drop interactive chrome, keep colours + sections intact. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: var(--desk);
+  }
+  /* honour our dark surfaces/charts when the user enables background graphics */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
 /* numeric / tabular helpers used by the science readouts */
 .mono {
   font-family: var(--font-mono);

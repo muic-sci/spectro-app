@@ -2,6 +2,7 @@
  * L3.7 — Results & export. The summary of everything measured, plus a CSV
  * download for the lab report.
  */
+import Link from "next/link";
 import { buttonVariants } from "@heroui/react";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
 import { Icon, Readout } from "@/components/ui/primitives";
@@ -102,15 +103,20 @@ export function ResultsStep({
         </table>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <Link href={`/experiments/${experimentId}/report`} className={buttonVariants({ variant: "primary" })}>
+          <Icon name="flask" size={16} /> Open full report
+        </Link>
         <a
           href={`/api/experiments/${experimentId}/export.csv`}
-          className={buttonVariants({ variant: "primary" })}
+          className={buttonVariants({ variant: "secondary" })}
           download
         >
-          <Icon name="arrowR" size={16} /> Export CSV
+          Export CSV
         </a>
-        <span className="text-xs text-t4">Everything you measured, ready for your lab report.</span>
+        <span className="text-xs text-t4">
+          The report has every strip, plot and result — ready to print or save as PDF.
+        </span>
       </div>
     </div>
   );
