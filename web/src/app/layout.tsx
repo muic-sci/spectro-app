@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { VersionBadge } from "@/components/ui/version-badge";
 
 // Fonts from the design handoff, loaded the Next way and exposed as the CSS
 // variables referenced by globals.css (@theme --font-sans / --font-mono).
@@ -31,7 +32,10 @@ export default function RootLayout({
   // measurement), so the app is dark-only: `.dark` is always on.
   return (
     <html lang="en" className={`dark ${spaceGrotesk.variable} ${ibmPlexMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <VersionBadge />
+      </body>
     </html>
   );
 }
