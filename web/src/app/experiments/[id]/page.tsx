@@ -93,6 +93,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
           <RoiStep
             experimentId={experiment!.id}
             roi={parseRoi(experiment!.roi)}
+            orientation={experiment!.orientation}
             calibrationImageUrl={calImage?.url || null}
             phoneOnline={phoneOnline}
             pending={pending}

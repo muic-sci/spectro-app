@@ -84,6 +84,14 @@ enum ReferenceLight {
   fluorescent
 }
 
+/// Which way the spectrum strip runs in the captured frame — the dispersion
+/// (wavelength) axis. Horizontal averages down columns; vertical averages
+/// across rows.
+enum SpectrumOrientation {
+  horizontal
+  vertical
+}
+
 enum WorkflowStep {
   experimentSetup
   cameraRoiSetup
@@ -128,6 +136,9 @@ model Experiment {
   // ROI in image coordinates: { left, top, width, height }. Null → full-frame
   // default (DEFAULT_ROI), preserved for pre-cropped strips.
   roi Json?
+
+  // Which way the spectrum runs in the frame (set on the lamp image in L3.1).
+  orientation SpectrumOrientation @default(horizontal)
 
   // Wavelength calibration (slope, intercept, rSquared, peaks[]) — stored as a
   // structured blob; derived, low-churn. Null until calibrated.

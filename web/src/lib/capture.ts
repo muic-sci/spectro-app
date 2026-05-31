@@ -37,6 +37,8 @@ export async function processCapture(opts: {
   roi: unknown;
   role: SpectralImageRole;
   bytes: Buffer;
+  /** Dispersion axis runs top→bottom (experiment.orientation === "vertical"). */
+  vertical?: boolean;
   concentration?: number;
   unit?: string;
 }): Promise<CaptureResult> {
@@ -45,7 +47,10 @@ export async function processCapture(opts: {
   // Max-channel keeps the blue lamp lines detectable; luminance for everything
   // else (CLAUDE.md "Intensity extraction method").
   const useMaxChannel = opts.role === "calibration";
-  const profile = extractIntensityProfile(raster, roi, { useMaxChannel });
+  const profile = extractIntensityProfile(raster, roi, {
+    useMaxChannel,
+    vertical: opts.vertical ?? false,
+  });
   const saturation = checkSaturation(raster, roi);
 
   // Replace-on-recapture for single-capture roles.
@@ -112,6 +117,7 @@ export async function reextractExperiment(experimentId: string): Promise<void> {
   });
   if (!experiment) return;
   const roi = parseRoi(experiment.roi) ?? DEFAULT_ROI;
+  const vertical = experiment.orientation === "vertical";
 
   for (const img of experiment.images) {
     let bytes: Buffer;
@@ -123,6 +129,7 @@ export async function reextractExperiment(experimentId: string): Promise<void> {
     const raster = await decodeImage(bytes);
     const profile = extractIntensityProfile(raster, roi, {
       useMaxChannel: img.role === "calibration",
+      vertical,
     });
     await prisma.spectralImage.update({
       where: { id: img.id },

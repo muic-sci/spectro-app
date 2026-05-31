@@ -42,6 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       roi: experiment.roi,
       role: pending.role,
       bytes,
+      vertical: experiment.orientation === "vertical",
       concentration: pending.concentration,
       unit: pending.unit,
     });

@@ -62,7 +62,15 @@ export async function uploadCaptureAction(
 
   try {
     const bytes = Buffer.from(await file.arrayBuffer());
-    const res = await processCapture({ experimentId: id, roi: experiment.roi, role, bytes, concentration, unit });
+    const res = await processCapture({
+      experimentId: id,
+      roi: experiment.roi,
+      role,
+      bytes,
+      vertical: experiment.orientation === "vertical",
+      concentration,
+      unit,
+    });
     publish(id, { type: "captured", data: { role, saturatedPct: res.saturation.fraction * 100 } });
     revalidatePath(`/experiments/${id}`);
     return {
@@ -100,6 +108,20 @@ export async function setRoiAction(formData: FormData) {
   await prisma.experiment.updateMany({ where: { id, userId }, data: { roi } });
   // The ROI defines every measurement's region — re-extract captured profiles
   // and recompute the calibration so they reflect the new box.
+  await reextractExperiment(id);
+  publish(id, { type: "captured" });
+  revalidatePath(`/experiments/${id}`);
+}
+
+/** L3.1 — set the spectrum orientation (which way the strip runs). */
+export async function setOrientationAction(formData: FormData) {
+  const userId = await requireUserId();
+  const id = String(formData.get("experimentId") ?? "");
+  const orientation = String(formData.get("orientation") ?? "");
+  if (orientation !== "horizontal" && orientation !== "vertical") return;
+
+  await prisma.experiment.updateMany({ where: { id, userId }, data: { orientation } });
+  // Orientation changes how profiles are extracted — recompute everything.
   await reextractExperiment(id);
   publish(id, { type: "captured" });
   revalidatePath(`/experiments/${id}`);

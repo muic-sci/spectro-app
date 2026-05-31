@@ -7,6 +7,7 @@
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { RoiBoxEditor } from "@/components/wizard/roi-box-editor";
 import { Icon } from "@/components/ui/primitives";
+import { setOrientationAction } from "@/app/experiments/[id]/actions";
 import type { CaptureRequest } from "@/lib/experiment-meta";
 
 export interface Roi {
@@ -16,15 +17,56 @@ export interface Roi {
   height: number;
 }
 
+type Orientation = "horizontal" | "vertical";
+
+/** Segmented control for which way the spectrum runs. */
+function OrientationToggle({
+  experimentId,
+  orientation,
+}: {
+  experimentId: string;
+  orientation: Orientation;
+}) {
+  const options: { value: Orientation; label: string }[] = [
+    { value: "horizontal", label: "↔ Horizontal" },
+    { value: "vertical", label: "↕ Vertical" },
+  ];
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs uppercase tracking-wide text-t3">Spectrum runs</span>
+      <div className="inline-flex overflow-hidden rounded-md border border-line">
+        {options.map((o, i) => (
+          <form key={o.value} action={setOrientationAction} className="contents">
+            <input type="hidden" name="experimentId" value={experimentId} />
+            <input type="hidden" name="orientation" value={o.value} />
+            <button
+              type="submit"
+              className={`px-3 py-1.5 text-sm ${i > 0 ? "border-l border-line" : ""} ${
+                orientation === o.value
+                  ? "bg-accent text-accent-ink"
+                  : "bg-panel text-t2 hover:text-t1"
+              }`}
+            >
+              {o.label}
+            </button>
+          </form>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function RoiStep({
   experimentId,
   roi,
+  orientation,
   calibrationImageUrl,
   phoneOnline,
   pending,
 }: {
   experimentId: string;
   roi: Roi | null;
+  orientation: Orientation;
   calibrationImageUrl: string | null;
   phoneOnline: boolean;
   pending: CaptureRequest | null;
@@ -52,7 +94,13 @@ export function RoiStep({
 
   return (
     <div className="flex flex-col gap-5">
-      <RoiBoxEditor experimentId={experimentId} imageUrl={calibrationImageUrl} initialRoi={roi} />
+      <OrientationToggle experimentId={experimentId} orientation={orientation} />
+      <RoiBoxEditor
+        experimentId={experimentId}
+        imageUrl={calibrationImageUrl}
+        initialRoi={roi}
+        orientation={orientation}
+      />
 
       <details className="rounded-lg border border-line bg-panel p-4">
         <summary className="cursor-pointer text-sm text-t2">Re-capture the lamp</summary>

@@ -48,14 +48,16 @@ function roiBounds(img: RasterImage, roi: Rect): RoiBounds {
 }
 
 /**
- * Extracts a 1-D intensity profile from the ROI: for each column, average the
- * grey level down the ROI height.
+ * Extracts a 1-D intensity profile from the ROI, averaging perpendicular to the
+ * dispersion axis: for a horizontal spectrum, average down each column; for a
+ * vertical spectrum (opts.vertical), average across each row.
  *
  * - Luminance (default): 0.299R + 0.587G + 0.114B — for blank/standards/unknown.
  * - Max-channel (useMaxChannel): max(R,G,B) — calibration lamp only, so the blue
  *   lamp lines (434.5/486 nm) stay detectable.
  *
- * Returns DataPoints where x is the absolute pixel column and y is mean intensity.
+ * Returns DataPoints where x is the pixel position along the dispersion axis
+ * (column for horizontal, row for vertical) and y is the mean intensity there.
  */
 export function extractIntensityProfile(
   img: RasterImage,
@@ -64,32 +66,43 @@ export function extractIntensityProfile(
 ): DataPoint[] {
   const lineariseGamma = opts.lineariseGamma ?? true;
   const useMaxChannel = opts.useMaxChannel ?? false;
+  const vertical = opts.vertical ?? false;
 
   const { x0, x1, y0, y1 } = roiBounds(img, roi);
+  const roiWidth = x1 - x0;
   const roiHeight = y1 - y0;
-  if (roiHeight <= 0 || x1 - x0 <= 0) return [];
+  if (roiHeight <= 0 || roiWidth <= 0) return [];
 
   const data = img.data;
   const stride = img.width * 3;
   const profile: DataPoint[] = [];
 
-  for (let x = x0; x < x1; x++) {
-    let sum = 0;
-    for (let y = y0; y < y1; y++) {
-      const idx = y * stride + x * 3;
-      let r = data[idx];
-      let g = data[idx + 1];
-      let b = data[idx + 2];
-      if (lineariseGamma) {
-        r = srgbToLinear(r);
-        g = srgbToLinear(g);
-        b = srgbToLinear(b);
-      }
-      sum += useMaxChannel
-        ? Math.max(r, Math.max(g, b))
-        : 0.299 * r + 0.587 * g + 0.114 * b;
+  const sample = (idx: number): number => {
+    let r = data[idx];
+    let g = data[idx + 1];
+    let b = data[idx + 2];
+    if (lineariseGamma) {
+      r = srgbToLinear(r);
+      g = srgbToLinear(g);
+      b = srgbToLinear(b);
     }
-    profile.push({ x, y: sum / roiHeight });
+    return useMaxChannel ? Math.max(r, Math.max(g, b)) : 0.299 * r + 0.587 * g + 0.114 * b;
+  };
+
+  if (vertical) {
+    // Dispersion runs top→bottom: one sample per row, averaged across columns.
+    for (let y = y0; y < y1; y++) {
+      let sum = 0;
+      for (let x = x0; x < x1; x++) sum += sample(y * stride + x * 3);
+      profile.push({ x: y, y: sum / roiWidth });
+    }
+  } else {
+    // Dispersion runs left→right: one sample per column, averaged down rows.
+    for (let x = x0; x < x1; x++) {
+      let sum = 0;
+      for (let y = y0; y < y1; y++) sum += sample(y * stride + x * 3);
+      profile.push({ x, y: sum / roiHeight });
+    }
   }
 
   return profile;

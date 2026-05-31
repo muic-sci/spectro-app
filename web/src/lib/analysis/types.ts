@@ -90,4 +90,9 @@ export interface ExtractOptions {
   lineariseGamma?: boolean;
   /** max(R,G,B) instead of luminance. Use for the calibration lamp only. */
   useMaxChannel?: boolean;
+  /**
+   * Dispersion (wavelength) axis runs top→bottom instead of left→right. When
+   * true, average across each ROI row → one sample per row (x = row index).
+   */
+  vertical?: boolean;
 }

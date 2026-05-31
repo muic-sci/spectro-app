@@ -150,7 +150,7 @@ export const STEP_GUIDANCE: Record<WorkflowStep, StepGuidance> = {
   },
   cameraRoiSetup: {
     why: "Every measurement must come from the exact same region of the strip, so they're all comparable. You need a photo to see where that region is — so we start with the lamp.",
-    todo: "Capture the lamp spectrum, then drag a box around the bright strip. (Already cropped to the strip? Just use the full strip.)",
+    todo: "Capture the lamp spectrum, set whether the strip runs across or up-and-down, then drag a box around it. (Already cropped to the strip? Just use the full strip.)",
   },
   calibration: {
     why: "A fluorescent lamp emits at known, fixed wavelengths. Finding those bright lines in the lamp photo tells us which pixel is which colour.",

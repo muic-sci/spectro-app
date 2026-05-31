@@ -28,10 +28,12 @@ export function RoiBoxEditor({
   experimentId,
   imageUrl,
   initialRoi,
+  orientation = "horizontal",
 }: {
   experimentId: string;
   imageUrl: string;
   initialRoi: Rect | null;
+  orientation?: "horizontal" | "vertical";
 }) {
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -59,13 +61,22 @@ export function RoiBoxEditor({
     const img = e.currentTarget;
     setNatural({ w: img.naturalWidth, h: img.naturalHeight });
     if (!box) {
-      // Default to a horizontal band across the middle — a hint to box the strip.
-      setBox({
-        left: 0,
-        top: Math.round(img.naturalHeight * 0.35),
-        width: img.naturalWidth,
-        height: Math.round(img.naturalHeight * 0.3),
-      });
+      // Default to a band along the strip's axis — a hint to box it.
+      setBox(
+        orientation === "vertical"
+          ? {
+              left: Math.round(img.naturalWidth * 0.35),
+              top: 0,
+              width: Math.round(img.naturalWidth * 0.3),
+              height: img.naturalHeight,
+            }
+          : {
+              left: 0,
+              top: Math.round(img.naturalHeight * 0.35),
+              width: img.naturalWidth,
+              height: Math.round(img.naturalHeight * 0.3),
+            },
+      );
     }
   }
 
