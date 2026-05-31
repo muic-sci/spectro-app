@@ -10,7 +10,8 @@
 #   - Docker + Compose plugin installed and the user in the docker group
 #   - docker login <registry> already run (or credentials in ~/.docker/config.json)
 #   - $DEPLOY_DIR contains docker-compose.yml and .env (the rsync'd docker/ folder)
-#   - the external `nginx-proxy` network exists: docker network create nginx-proxy
+#   - the reverse proxy is connected out-of-band (compose does not manage it);
+#     set PROXY_NETWORK in .env to have this script re-attach it after each deploy
 #   - DB migrations apply automatically when the app container boots (no manual step)
 
 set -euo pipefail
@@ -76,6 +77,16 @@ cd "$DEPLOY_DIR"
 docker compose pull                    >> "$LOG_FILE" 2>&1
 docker compose down                    >> "$LOG_FILE" 2>&1
 docker compose --env-file .env up -d   >> "$LOG_FILE" 2>&1
+
+# The reverse-proxy network is connected manually (not via compose), so `down`
+# drops it on every release. Re-attach it here if PROXY_NETWORK is set in .env.
+PROXY_NETWORK=$(grep -E '^PROXY_NETWORK=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")
+if [[ -n "$PROXY_NETWORK" ]]; then
+    app_cid=$(docker compose ps -q app)
+    docker network connect "$PROXY_NETWORK" "$app_cid" >> "$LOG_FILE" 2>&1 \
+        && log "Connected app to $PROXY_NETWORK" \
+        || log "Note: could not connect app to $PROXY_NETWORK (already attached?)"
+fi
 
 echo "$new_tag" > "$DEPLOYED_FILE"
 log "Successfully deployed $new_tag"

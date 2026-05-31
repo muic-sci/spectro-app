@@ -51,12 +51,7 @@ services:
       # SPECTRO_STORAGE_DIR (kept in sync with the env var above). Relative host
       # paths resolve against this compose file's directory.
       - ${UPLOADS_DIR:-./uploads}:${SPECTRO_STORAGE_DIR:-/data/uploads}
-    networks:
-      - default
-      - nginx-proxy
-
-networks:
-  # The app joins the shared nginx-proxy network (created once on the server:
-  # `docker network create nginx-proxy`). Postgres stays on `default` only.
-  nginx-proxy:
-    external: true
+    # The reverse proxy is connected MANUALLY after `up`, not via compose:
+    #   docker network connect nginx-docker $(docker compose ps -q app)
+    # (VIRTUAL_HOST / VIRTUAL_PORT / LETSENCRYPT_HOST above are read by the proxy
+    # once the app shares its network.)

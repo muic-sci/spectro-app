@@ -46,11 +46,11 @@ export SPECTRO_APP_IMAGE=$IMAGE_NAME
 echo "--> Loading image"
 docker load < $ARCHIVE
 
-echo "--> Ensuring nginx-proxy network exists"
-docker network create nginx-proxy 2>/dev/null || true
-
 echo "--> Starting containers (db migrations run on app boot)"
 docker compose --env-file .env up -d --remove-orphans
+
+echo "--> Connect the app to your reverse-proxy network manually, e.g.:"
+echo "      docker network connect nginx-docker \$(docker compose ps -q app)"
 
 echo "--> Done"
 docker compose ps
