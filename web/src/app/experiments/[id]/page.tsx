@@ -12,6 +12,9 @@ import { RoiStep } from "@/components/wizard/steps/roi-step";
 import { CalibrationStep } from "@/components/wizard/steps/calibration-step";
 import { BlankStep } from "@/components/wizard/steps/blank-step";
 import { StandardsStep } from "@/components/wizard/steps/standards-step";
+import { AbsorbanceReviewStep } from "@/components/wizard/steps/absorbance-review-step";
+import { UnknownStep } from "@/components/wizard/steps/unknown-step";
+import { ResultsStep } from "@/components/wizard/steps/results-step";
 import { ComingSoonStep } from "@/components/wizard/steps/coming-soon-step";
 import { ConnBadge, Icon, SpectroMark, SpectrumBar, StatusChip } from "@/components/ui/primitives";
 import type { WorkflowStep } from "@/generated/prisma/enums";
@@ -45,6 +48,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
 
   const derived = deriveAnalysis({
     calibration: experiment.calibration,
+    lambdaMaxOverride: experiment.lambdaMax,
     images: experiment.images,
     standards: experiment.standards,
     unknowns: experiment.unknowns,
@@ -66,6 +70,12 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
   } else if (currentStep === "standards" && derived.standards.length < 2) {
     canContinue = false;
     continueHint = "Add at least 2 standards to continue";
+  } else if (currentStep === "absorbanceReview" && !derived.curve) {
+    canContinue = false;
+    continueHint = "Build the calibration curve to continue";
+  } else if (currentStep === "unknown" && !derived.unknowns.some((u) => u.concentration != null)) {
+    canContinue = false;
+    continueHint = "Measure an unknown to continue";
   }
 
   function renderCanvas() {
@@ -97,6 +107,12 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             lambdaMax={derived.lambdaMax}
           />
         );
+      case "absorbanceReview":
+        return <AbsorbanceReviewStep experimentId={experiment!.id} derived={derived} />;
+      case "unknown":
+        return <UnknownStep experimentId={experiment!.id} derived={derived} />;
+      case "results":
+        return <ResultsStep experimentId={experiment!.id} derived={derived} />;
       default:
         return <ComingSoonStep label={currentMeta?.label ?? "This step"} />;
     }

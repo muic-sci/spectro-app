@@ -120,6 +120,42 @@ export async function deleteStandardAction(formData: FormData) {
   revalidatePath(`/experiments/${id}`);
 }
 
+/** L3.5 — set (or clear → auto) the λmax used for the Beer-Lambert curve. */
+export async function setLambdaMaxAction(formData: FormData) {
+  const userId = await requireUserId();
+  const id = String(formData.get("experimentId") ?? "");
+  const reset = formData.get("reset") === "1";
+  let lambdaMax: number | null = null;
+  if (!reset) {
+    const v = Number(formData.get("lambdaMax"));
+    if (!Number.isFinite(v) || v <= 0) return;
+    lambdaMax = v;
+  }
+  await prisma.experiment.updateMany({ where: { id, userId }, data: { lambdaMax } });
+  revalidatePath(`/experiments/${id}`);
+}
+
+/** L3.6 — remove an unknown (and its captured image binary). */
+export async function deleteUnknownAction(formData: FormData) {
+  const userId = await requireUserId();
+  const id = String(formData.get("experimentId") ?? "");
+  const unknownId = String(formData.get("unknownId") ?? "");
+  if (!id || !unknownId) return;
+
+  const unknown = await prisma.unknown.findFirst({
+    where: { id: unknownId, experiment: { id, userId } },
+    select: { id: true, imageId: true },
+  });
+  if (!unknown) return;
+
+  await prisma.unknown.delete({ where: { id: unknown.id } });
+  if (unknown.imageId) {
+    await deleteImageBytes(unknown.imageId);
+    await prisma.spectralImage.deleteMany({ where: { id: unknown.imageId } });
+  }
+  revalidatePath(`/experiments/${id}`);
+}
+
 /** Move the wizard to a specific step (Back / Continue). */
 export async function goToStepAction(formData: FormData) {
   const userId = await requireUserId();
