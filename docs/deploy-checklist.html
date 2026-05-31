@@ -130,12 +130,12 @@ const DATA = [
   {
     title: "4 · Maintenance",
     tag: "repeat", tagText: "ongoing",
-    hint: "Data lives in two named volumes. Back up Postgres regularly.",
+    hint: "Data lives in two host bind-mount dirs (POSTGRES_DATA_DIR + UPLOADS_DIR, default ./pgdata + ./uploads in the deploy dir). Back them up regularly.",
     items: [
-      { t: "Confirm the volume names", d: "Compose prefixes volumes with the deploy-dir name (e.g. spectro-app_pgdata). Check before backing up.",
-        cmd: "docker volume ls | grep -E 'pgdata|uploads'" },
-      { t: "Back up the Postgres volume", d: "Adjust the volume name to what the previous step showed.",
-        cmd: "docker run --rm -v spectro-app_pgdata:/v -v \"$PWD\":/b alpine \\\n  tar czf /b/pgdata-$(date +%F).tar.gz -C /v ." },
+      { t: "Back up the database (consistent dump while running)", d: "Replace spectro/spectro with your POSTGRES_USER / POSTGRES_DB.",
+        cmd: "cd " + DEPLOY_DIR + " && docker compose exec -T db \\\n  pg_dump -U spectro spectro | gzip > db-$(date +%F).sql.gz" },
+      { t: "Back up the uploaded images", d: "Plain tar of the host uploads dir.",
+        cmd: "tar czf uploads-$(date +%F).tar.gz -C " + DEPLOY_DIR + " uploads" },
       { t: "Roll out an update", d: "Just push a higher vX.Y.Z tag — cron-deploy.sh only deploys strictly greater versions.",
         cmd: "git tag v1.0.1 && git push origin v1.0.1" },
     ],
