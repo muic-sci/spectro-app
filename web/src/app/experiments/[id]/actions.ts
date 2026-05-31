@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUserId } from "@/auth-helpers";
 import { getExperiment } from "@/lib/experiments";
-import { processCapture } from "@/lib/capture";
+import { processCapture, reextractExperiment } from "@/lib/capture";
 import { deleteImageBytes } from "@/lib/storage";
 import { publish } from "@/lib/realtime";
 import { prisma } from "@/lib/db";
@@ -98,6 +98,10 @@ export async function setRoiAction(formData: FormData) {
   }
 
   await prisma.experiment.updateMany({ where: { id, userId }, data: { roi } });
+  // The ROI defines every measurement's region — re-extract captured profiles
+  // and recompute the calibration so they reflect the new box.
+  await reextractExperiment(id);
+  publish(id, { type: "captured" });
   revalidatePath(`/experiments/${id}`);
 }
 

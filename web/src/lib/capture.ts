@@ -18,7 +18,7 @@ import {
   DEFAULT_ROI,
 } from "@/lib/analysis";
 import type { Calibration, SaturationResult } from "@/lib/analysis";
-import { saveImageBytes, deleteImageBytes } from "@/lib/storage";
+import { saveImageBytes, deleteImageBytes, readImageBytes } from "@/lib/storage";
 import { parseRoi } from "@/lib/experiment-json";
 import type { SpectralImageRole } from "@/generated/prisma/enums";
 
@@ -97,4 +97,43 @@ export async function processCapture(opts: {
   }
 
   return { imageId: image.id, saturation, calibration };
+}
+
+/**
+ * Re-extract every stored image's profile for the experiment's current ROI and
+ * recompute the calibration (web-ux-brief.md §7: changing the ROI recomputes
+ * prior captures). Called after the ROI is changed. Reads image bytes back from
+ * storage; images whose binary is gone are skipped.
+ */
+export async function reextractExperiment(experimentId: string): Promise<void> {
+  const experiment = await prisma.experiment.findUnique({
+    where: { id: experimentId },
+    include: { images: true },
+  });
+  if (!experiment) return;
+  const roi = parseRoi(experiment.roi) ?? DEFAULT_ROI;
+
+  for (const img of experiment.images) {
+    let bytes: Buffer;
+    try {
+      bytes = await readImageBytes(img.id);
+    } catch {
+      continue; // binary missing (e.g. seeded test data) — leave its profile as-is
+    }
+    const raster = await decodeImage(bytes);
+    const profile = extractIntensityProfile(raster, roi, {
+      useMaxChannel: img.role === "calibration",
+    });
+    await prisma.spectralImage.update({
+      where: { id: img.id },
+      data: { intensityProfile: { points: profile } as unknown as Prisma.InputJsonValue },
+    });
+    if (img.role === "calibration") {
+      const calibration = calibrateFromLampProfile(profile);
+      await prisma.experiment.update({
+        where: { id: experimentId },
+        data: { calibration: calibration as unknown as Prisma.InputJsonValue },
+      });
+    }
+  }
 }

@@ -66,7 +66,10 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
   // Continue gating per step (web-ux-brief.md §8 state catalogue).
   let canContinue = true;
   let continueHint: string | undefined;
-  if (currentStep === "calibration" && !derived.calibration) {
+  if (currentStep === "cameraRoiSetup" && !calImage) {
+    canContinue = false;
+    continueHint = "Capture the lamp to continue";
+  } else if (currentStep === "calibration" && !derived.calibration) {
     canContinue = false;
     continueHint = "Capture the lamp to continue";
   } else if (currentStep === "blank" && !blankImage) {
@@ -86,7 +89,15 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
   function renderCanvas() {
     switch (currentStep) {
       case "cameraRoiSetup":
-        return <RoiStep experimentId={experiment!.id} roi={parseRoi(experiment!.roi)} />;
+        return (
+          <RoiStep
+            experimentId={experiment!.id}
+            roi={parseRoi(experiment!.roi)}
+            calibrationImageUrl={calImage?.url || null}
+            phoneOnline={phoneOnline}
+            pending={pending}
+          />
+        );
       case "calibration":
         return (
           <CalibrationStep

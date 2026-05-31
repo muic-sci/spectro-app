@@ -149,12 +149,12 @@ export const STEP_GUIDANCE: Record<WorkflowStep, StepGuidance> = {
     todo: "Name the experiment and pick a mode and reference light.",
   },
   cameraRoiSetup: {
-    why: "Every measurement must come from the exact same region of the strip, so they're all comparable.",
-    todo: "On your phone, frame the rainbow strip and lock focus. Here, mark the strip — or use the full strip if your image is already cropped.",
+    why: "Every measurement must come from the exact same region of the strip, so they're all comparable. You need a photo to see where that region is — so we start with the lamp.",
+    todo: "Capture the lamp spectrum, then drag a box around the bright strip. (Already cropped to the strip? Just use the full strip.)",
   },
   calibration: {
-    why: "A fluorescent lamp emits at known, fixed wavelengths. Finding those bright lines in your photo tells us which pixel is which colour.",
-    todo: "Capture the lamp spectrum. We'll find the 5 lines automatically — check the fit looks right.",
+    why: "A fluorescent lamp emits at known, fixed wavelengths. Finding those bright lines in the lamp photo tells us which pixel is which colour.",
+    todo: "We found the 5 emission lines in your lamp capture — check they landed on the bright peaks and the fit (R²) looks right.",
   },
   blank: {
     why: "The blank is your 100%-light reference — solvent and cuvette with no sample. Absorbance is measured against it.",
