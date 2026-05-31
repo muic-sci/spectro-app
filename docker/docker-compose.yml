@@ -15,7 +15,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Bind-mount to a host path (set POSTGRES_DATA_DIR in .env). Relative
+      # paths resolve against this compose file's directory. Easy to back up.
+      - ${POSTGRES_DATA_DIR:-./pgdata}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -39,20 +41,19 @@ services:
       - AUTH_TRUST_HOST=true
       - EMAIL_SERVER=${EMAIL_SERVER}
       - EMAIL_FROM=${EMAIL_FROM}
-      - SPECTRO_STORAGE_DIR=/data/uploads
+      - SPECTRO_STORAGE_DIR=${SPECTRO_STORAGE_DIR:-/data/uploads}
       # nginx-proxy + acme-companion read these to route + issue TLS.
       - VIRTUAL_HOST=${VIRTUAL_HOST}
       - VIRTUAL_PORT=3000
       - LETSENCRYPT_HOST=${LETSENCRYPT_HOST}
     volumes:
-      - uploads:/data/uploads
+      # Bind-mount the captured-image store: host UPLOADS_DIR -> the in-container
+      # SPECTRO_STORAGE_DIR (kept in sync with the env var above). Relative host
+      # paths resolve against this compose file's directory.
+      - ${UPLOADS_DIR:-./uploads}:${SPECTRO_STORAGE_DIR:-/data/uploads}
     networks:
       - default
       - nginx-proxy
-
-volumes:
-  pgdata:
-  uploads:
 
 networks:
   # The app joins the shared nginx-proxy network (created once on the server:

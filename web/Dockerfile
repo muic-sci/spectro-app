@@ -42,8 +42,10 @@ FROM node:22-slim AS runner
 WORKDIR /app
 
 # openssl: required by the Prisma schema/migration engine. ca-certificates:
-# trusted roots for outbound SMTP (TLS) password-reset email.
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+# trusted roots for outbound SMTP (TLS) password-reset email. gosu: the
+# entrypoint starts as root to fix ownership of bind-mounted data dirs, then
+# drops to the unprivileged `node` user to run the app.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates gosu \
     && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
@@ -70,7 +72,8 @@ RUN chmod +x ./docker-entrypoint.sh \
     && mkdir -p /data/uploads \
     && chown -R node:node /app /data
 
-USER node
+# NB: no `USER node` — the entrypoint starts as root (to chown a possibly
+# bind-mounted uploads dir) and then drops to `node` via gosu.
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
