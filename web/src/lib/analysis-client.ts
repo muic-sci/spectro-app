@@ -19,11 +19,19 @@ import { decodeImageBrowser } from "./analysis/decode.client";
 import {
   extractIntensityProfile,
   checkSaturation,
+  scoreOrientation,
   calibrateFromLampProfile,
   roiPixelBounds,
   DEFAULT_ROI,
 } from "@/lib/analysis";
-import type { Calibration, DataPoint, RasterImage, Rect, SaturationResult } from "@/lib/analysis";
+import type {
+  Calibration,
+  DataPoint,
+  OrientationScore,
+  RasterImage,
+  Rect,
+  SaturationResult,
+} from "@/lib/analysis";
 
 /** Decoded rasters cached by source URL, so a ROI tweak re-extracts without re-fetching/re-decoding. */
 const rasterCache = new Map<string, RasterImage>();
@@ -84,6 +92,18 @@ export async function renderCropBlob(raster: RasterImage, roi: Rect | null): Pro
   }
   ctx.putImageData(out, 0, 0);
   return canvasToJpegBlob(canvas);
+}
+
+/**
+ * Inspect an already-stored image's ROI to suggest which way the spectrum runs.
+ * Decode is cached, so this is cheap to call live as the student drags the box.
+ */
+export async function suggestOrientation(
+  url: string,
+  roi: Rect | null,
+): Promise<OrientationScore> {
+  const raster = await decodeFromUrl(url);
+  return scoreOrientation(raster, roi ?? DEFAULT_ROI);
 }
 
 export interface ClientCapture {

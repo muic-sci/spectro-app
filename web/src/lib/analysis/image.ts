@@ -6,7 +6,14 @@
  * pixel math has no dependency on the decoder. Use `decodeImage()` from
  * ./decode (sharp, server-only) to obtain a RasterImage from JPEG bytes.
  */
-import type { DataPoint, ExtractOptions, RasterImage, Rect, SaturationResult } from "./types";
+import type {
+  DataPoint,
+  ExtractOptions,
+  OrientationScore,
+  RasterImage,
+  Rect,
+  SaturationResult,
+} from "./types";
 import { SpectralConstants } from "./constants";
 
 /** Default ROI used when none is set: the full image (clamped to size). */
@@ -150,5 +157,104 @@ export function checkSaturation(
     threshold,
     fraction,
     isSaturated: saturated > 0,
+  };
+}
+
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/**
+ * Infers which way the spectrum runs from the ROI's colour gradient, so the
+ * orientation can be auto-selected as the student draws/adjusts the box. A
+ * spectral strip is a colour gradient along the dispersion axis (red at one end,
+ * blue at the other) that is uniform across its width. We measure that with a
+ * one-way ANOVA on the RGB pixels:
+ *
+ *   - Group pixels by COLUMN → η²_horizontal = between-column variance / total.
+ *     Large when colour changes strongly across columns but each column is one
+ *     colour ⇒ the gradient runs left→right (a horizontal strip).
+ *   - Group pixels by ROW → η²_vertical, symmetrically for a top→bottom strip.
+ *
+ * The larger η² is the suggested axis; its value (0..1) doubles as a "goodness"
+ * score — how cleanly the lines perpendicular to the dispersion axis share one
+ * colour. Direction (red→blue vs blue→red) doesn't matter: calibration auto-flips.
+ *
+ * Pixels are subsampled to ~`targetSamples` so the cost is bounded regardless of
+ * image size (this runs live on every box drag, client-side).
+ */
+export function scoreOrientation(
+  img: RasterImage,
+  roi: Rect,
+  targetSamples = 40000,
+): OrientationScore {
+  const blank: OrientationScore = {
+    horizontal: 0,
+    vertical: 0,
+    suggestion: "horizontal",
+    goodness: 0,
+    margin: 0,
+  };
+
+  const { x0, x1, y0, y1 } = roiBounds(img, roi);
+  const w = x1 - x0;
+  const h = y1 - y0;
+  if (w < 2 || h < 2) return blank;
+
+  // Subsample on a regular grid so a 12-megapixel ROI costs the same as a small one.
+  const step = Math.max(1, Math.round(Math.sqrt((w * h) / targetSamples)));
+  const nx = Math.ceil(w / step);
+  const ny = Math.ceil(h / step);
+  const n = nx * ny;
+
+  const data = img.data;
+  const stride = img.width * 3;
+
+  const grandSum = [0, 0, 0];
+  const sumSq = [0, 0, 0];
+  const colSum = new Float64Array(nx * 3); // per-column channel sums (groups for η²_horizontal)
+  const rowSum = new Float64Array(ny * 3); // per-row channel sums (groups for η²_vertical)
+
+  for (let j = 0; j < ny; j++) {
+    const y = y0 + j * step;
+    const rowBase = j * 3;
+    for (let i = 0; i < nx; i++) {
+      const idx = y * stride + (x0 + i * step) * 3;
+      const colBase = i * 3;
+      for (let c = 0; c < 3; c++) {
+        const v = data[idx + c];
+        grandSum[c] += v;
+        sumSq[c] += v * v;
+        colSum[colBase + c] += v;
+        rowSum[rowBase + c] += v;
+      }
+    }
+  }
+
+  let ssTotal = 0;
+  let correction = 0; // n · grandMean² per channel, the shared ANOVA correction term
+  const grandMean = [0, 0, 0];
+  for (let c = 0; c < 3; c++) {
+    grandMean[c] = grandSum[c] / n;
+    ssTotal += sumSq[c] - n * grandMean[c] * grandMean[c];
+    correction += n * grandMean[c] * grandMean[c];
+  }
+  if (ssTotal <= 1e-6) return blank; // flat ROI — no colour variation, axis undefined
+
+  let ssCols = 0; // Σ_columns (ny pixels each) of the column-mean's squared deviation
+  for (let i = 0; i < nx * 3; i++) ssCols += (colSum[i] * colSum[i]) / ny;
+  ssCols -= correction;
+
+  let ssRows = 0;
+  for (let j = 0; j < ny * 3; j++) ssRows += (rowSum[j] * rowSum[j]) / nx;
+  ssRows -= correction;
+
+  const horizontal = clamp01(ssCols / ssTotal);
+  const vertical = clamp01(ssRows / ssTotal);
+  const suggestion = horizontal >= vertical ? "horizontal" : "vertical";
+  return {
+    horizontal,
+    vertical,
+    suggestion,
+    goodness: Math.max(horizontal, vertical),
+    margin: Math.abs(horizontal - vertical),
   };
 }

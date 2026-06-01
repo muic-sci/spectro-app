@@ -13,6 +13,7 @@ export {
   srgbToLinear,
   extractIntensityProfile,
   checkSaturation,
+  scoreOrientation,
   roiPixelBounds,
   DEFAULT_ROI,
 } from "./image";

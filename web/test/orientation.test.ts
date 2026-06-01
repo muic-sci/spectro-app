@@ -12,6 +12,7 @@ import {
   calibrateFromLampProfile,
   DEFAULT_ROI,
   extractIntensityProfile,
+  scoreOrientation,
   type RasterImage,
 } from "../src/lib/analysis";
 
@@ -50,5 +51,52 @@ describe("vertical orientation", () => {
     expect(vCal.slope).toBeCloseTo(hCal.slope, 2);
     expect(vCal.intercept).toBeCloseTo(hCal.intercept, 0);
     expect(vCal.rSquared).toBeCloseTo(hCal.rSquared, 2);
+  });
+});
+
+describe("scoreOrientation (auto-detect from colour gradient)", () => {
+  it("suggests horizontal for the 550×60 lamp strip and vertical for its 90° rotation", async () => {
+    const base = await sharp(readFileSync(resolve(FIXTURES, "cal.jpg"))).rotate().toBuffer();
+
+    const h = await rawOf(sharp(base));
+    const hScore = scoreOrientation(h, DEFAULT_ROI);
+    expect(hScore.suggestion).toBe("horizontal");
+    expect(hScore.horizontal).toBeGreaterThan(hScore.vertical);
+    expect(hScore.goodness).toBeGreaterThan(0.6); // colour clearly varies along the strip
+
+    const v = await rawOf(sharp(base).rotate(90));
+    const vScore = scoreOrientation(v, DEFAULT_ROI);
+    expect(vScore.suggestion).toBe("vertical");
+    expect(vScore.vertical).toBeGreaterThan(vScore.horizontal);
+    // Rotation-equivalent: a strip is equally "good" whichever way it is turned.
+    expect(vScore.goodness).toBeCloseTo(hScore.goodness, 1);
+  });
+
+  it("returns a degenerate (low-goodness) score for a flat, colourless ROI", () => {
+    const w = 40;
+    const ht = 40;
+    const flat: RasterImage = { width: w, height: ht, data: new Uint8Array(w * ht * 3).fill(128) };
+    const score = scoreOrientation(flat, DEFAULT_ROI);
+    expect(score.goodness).toBe(0);
+    expect(score.margin).toBe(0);
+  });
+
+  it("scores a synthetic pure horizontal gradient ~1 on the horizontal axis", () => {
+    const w = 60;
+    const ht = 20;
+    const data = new Uint8Array(w * ht * 3);
+    for (let y = 0; y < ht; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 3;
+        // Colour depends only on the column → identical down every column.
+        data[i] = Math.round((x / (w - 1)) * 255); // R rises L→R
+        data[i + 1] = 40;
+        data[i + 2] = Math.round((1 - x / (w - 1)) * 255); // B falls L→R
+      }
+    }
+    const score = scoreOrientation({ width: w, height: ht, data }, DEFAULT_ROI);
+    expect(score.suggestion).toBe("horizontal");
+    expect(score.horizontal).toBeGreaterThan(0.99);
+    expect(score.vertical).toBeLessThan(0.01);
   });
 });

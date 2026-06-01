@@ -85,6 +85,27 @@ export interface CalibrationCurve {
   dataPoints: DataPoint[]; // (concentration, absorbance)
 }
 
+/**
+ * Result of inspecting an ROI's colour gradient to decide which way the spectrum
+ * runs. `horizontal`/`vertical` are η² (0..1) — the fraction of the ROI's colour
+ * variance explained by column-position vs row-position. A clean strip has nearly
+ * all its colour variance along one axis (the dispersion axis) and almost none
+ * perpendicular to it (each line across the strip is a single colour), so the
+ * larger value is both the suggested orientation and a "goodness" score.
+ */
+export interface OrientationScore {
+  /** η²: variance explained by column position. High ⇒ the strip runs horizontally. */
+  horizontal: number;
+  /** η²: variance explained by row position. High ⇒ the strip runs vertically. */
+  vertical: number;
+  /** The better-fitting axis (argmax of the two η² values). */
+  suggestion: "horizontal" | "vertical";
+  /** η² of the suggested axis (0..1) — how uniform the colour is along each perpendicular line. */
+  goodness: number;
+  /** |horizontal − vertical|; small ⇒ the two axes fit about equally (ambiguous). */
+  margin: number;
+}
+
 export interface ExtractOptions {
   /** Undo sRGB gamma to linear light before averaging. On by default. */
   lineariseGamma?: boolean;

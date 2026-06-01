@@ -18,7 +18,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
 import { Icon } from "@/components/ui/primitives";
-import { reextractAll } from "@/lib/analysis-client";
+import { reextractAll, suggestOrientation } from "@/lib/analysis-client";
+import type { OrientationScore } from "@/lib/analysis";
 import { persistReextractAction } from "@/app/experiments/[id]/actions";
 
 interface Rect {
@@ -55,6 +56,11 @@ export function RoiBoxEditor({
   const [orientation, setOrientation] = useState<Orientation>(initialOrientation);
   const [box, setBox] = useState<Rect | null>(initialRoi);
   const [saving, setSaving] = useState(false);
+  // Live colour-gradient analysis of the current box → auto orientation + goodness.
+  const [score, setScore] = useState<OrientationScore | null>(null);
+  // While true, the orientation chip follows the detected axis as the box changes.
+  const [auto, setAuto] = useState(true);
+  const autoRef = useRef(true); // mirror of `auto` for the async scoring callback
   const drag = useRef<{ mode: Mode; startX: number; startY: number; start: Rect } | null>(null);
 
   const toImg = useCallback(
@@ -113,6 +119,40 @@ export function RoiBoxEditor({
       // image not yet decodable — the next render will retry
     }
   }, [box, natural]);
+
+  // Re-score the colour gradient inside the box whenever it changes (debounced —
+  // decode is cached, so this is just an ANOVA over the ROI pixels in the browser).
+  // When not manually overridden and the detection is confident, auto-follow the
+  // detected axis (persisted only on Save, like the box itself).
+  useEffect(() => {
+    if (!natural) return;
+    const roi: Rect | null = box
+      ? {
+          left: Math.round(box.left),
+          top: Math.round(box.top),
+          width: Math.round(box.width),
+          height: Math.round(box.height),
+        }
+      : null;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      suggestOrientation(imageUrl, roi)
+        .then((s) => {
+          if (cancelled) return;
+          setScore(s);
+          if (autoRef.current && s.goodness >= 0.35 && s.margin >= 0.05) {
+            setOrientation(s.suggestion);
+          }
+        })
+        .catch(() => {
+          /* leave the previous score in place */
+        });
+    }, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [box, natural, imageUrl]);
 
   function startDrag(mode: Mode, e: React.PointerEvent) {
     if (!natural) return;
@@ -246,9 +286,18 @@ export function RoiBoxEditor({
   }
 
   function chooseOrientation(next: Orientation) {
+    // Manual pick: stop auto-following and persist immediately (existing behaviour).
+    autoRef.current = false;
+    setAuto(false);
     if (next === orientation || saving) return;
     setOrientation(next);
     void commit(false, next);
+  }
+
+  function reenableAuto() {
+    autoRef.current = true;
+    setAuto(true);
+    if (score && score.suggestion !== orientation) setOrientation(score.suggestion);
   }
 
   function useFullStrip() {
@@ -264,27 +313,94 @@ export function RoiBoxEditor({
     { value: "vertical", label: "↕ Vertical" },
   ];
 
+  // Goodness = the suggested axis's η² (how uniform colour is across the strip).
+  const goodnessPct = score ? Math.round(score.goodness * 100) : null;
+  const confident = !!score && score.goodness >= 0.35 && score.margin >= 0.05;
+  const toneVar =
+    score == null
+      ? "var(--t3)"
+      : score.goodness >= 0.85
+        ? "var(--ok)"
+        : score.goodness >= 0.6
+          ? "var(--warn)"
+          : "var(--danger-color)";
+  const qualityLabel =
+    score == null
+      ? "Analysing…"
+      : score.goodness >= 0.85
+        ? "Clear"
+        : score.goodness >= 0.6
+          ? "Usable"
+          : "Unclear";
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <span className="text-xs uppercase tracking-wide text-t3">Spectrum runs</span>
-        <div className="inline-flex overflow-hidden rounded-md border border-line">
-          {orientations.map((o, i) => (
+      <div className="flex flex-col gap-2.5">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs uppercase tracking-wide text-t3">Spectrum runs</span>
+          <div className="inline-flex overflow-hidden rounded-md border border-line">
+            {orientations.map((o, i) => {
+              const suggested = confident && score?.suggestion === o.value;
+              const selected = orientation === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  disabled={saving}
+                  onClick={() => chooseOrientation(o.value)}
+                  className={`px-3 py-1.5 text-sm disabled:opacity-60 ${i > 0 ? "border-l border-line" : ""} ${
+                    selected ? "bg-accent text-accent-ink" : "bg-panel text-t2 hover:text-t1"
+                  }`}
+                >
+                  {o.label}
+                  {suggested && (
+                    <span
+                      title="Auto-detected from the colour gradient"
+                      className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle"
+                      style={{ background: selected ? "currentColor" : toneVar }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {auto ? (
+            <span className="text-xs text-t4">Auto-detected from colour</span>
+          ) : (
             <button
-              key={o.value}
               type="button"
-              disabled={saving}
-              onClick={() => chooseOrientation(o.value)}
-              className={`px-3 py-1.5 text-sm disabled:opacity-60 ${i > 0 ? "border-l border-line" : ""} ${
-                orientation === o.value
-                  ? "bg-accent text-accent-ink"
-                  : "bg-panel text-t2 hover:text-t1"
-              }`}
+              onClick={reenableAuto}
+              className="text-xs hover:underline"
+              style={{ color: "var(--accent-color)" }}
             >
-              {o.label}
+              ↺ Auto-detect
             </button>
-          ))}
+          )}
         </div>
+
+        {/* Region clarity: how cleanly each line across the strip is a single colour. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-t3">Region clarity</span>
+          <div
+            className="h-1.5 w-28 overflow-hidden rounded-full"
+            style={{ background: "var(--panel-2)" }}
+          >
+            <div
+              className="h-full rounded-full transition-all"
+              style={{ width: `${goodnessPct ?? 0}%`, background: toneVar }}
+            />
+          </div>
+          <span className="mono text-xs" style={{ color: toneVar }}>
+            {goodnessPct == null ? "—" : `${goodnessPct}%`} · {qualityLabel}
+          </span>
+        </div>
+
+        {score && score.goodness < 0.6 && (
+          <p className="text-xs" style={{ color: "var(--warn)" }}>
+            Colours vary across the strip&apos;s width — tighten the box to just the bright spectrum
+            (so each line is one colour), or pick the orientation manually.
+          </p>
+        )}
       </div>
 
       <div
