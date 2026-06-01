@@ -3,12 +3,11 @@
  * dataset (materials/002, mirrored into test/fixtures/spectro-002) end-to-end
  * through the TS analysis port and pins the results.
  *
- * Decoder caveat: the web port decodes JPEGs with sharp (libvips) + EXIF
- * auto-orient, whereas the Dart app uses the `image` package. These differ at
- * the sub-pixel/sub-peak level. On *this* lamp image the two mercury blue lines
- * (434.5 / 486 nm) are nearly merged into one bright plateau under sharp's
- * decode, so the calibration is slightly softer than the Dart-documented
- * R²>0.999. We therefore pin:
+ * Decoder note: the web port decodes JPEGs with sharp (libvips) + EXIF
+ * auto-orient, whereas the Dart app uses the `image` package. With the
+ * collinearity-based peak selection the web calibration now recovers the five
+ * lamp lines and fits pixel→λ at R²≈0.9996 — essentially the Dart reference
+ * (slope≈0.579 nm/px). We pin:
  *   - the *exact* absorbance chain (decoder-robust, load-bearing science):
  *     A@λmax strictly rising with concentration, stable λmax, Beer-Lambert
  *     linearity — these are the claims the app actually teaches; and
@@ -69,12 +68,15 @@ describe("golden dataset: materials/002 (550×60 spectral strips)", () => {
     expect(calibration.slope).toBeLessThan(0.65);
     expect(calibration.intercept).toBeGreaterThan(370);
     expect(calibration.intercept).toBeLessThan(410);
-    expect(calibration.rSquared).toBeGreaterThan(0.9);
-    // snapshot anchors (sharp decode): peaks≈[66,251,328,370,458],
-    // slope≈0.477, intercept≈392.0, R²≈0.946
-    expect(Math.round(px[0])).toBe(66);
-    expect(calibration.slope).toBeCloseTo(0.477, 2);
-    expect(calibration.intercept).toBeCloseTo(392.0, 0);
+    expect(calibration.rSquared).toBeGreaterThan(0.99);
+    // snapshot anchors (sharp decode, collinearity selection + raw-max snap):
+    // peaks≈[63,151,254,325,366], slope≈0.582, intercept≈397.9, R²≈0.9998 — now
+    // essentially the Dart reference (the old 0.477/0.946 was a starved-candidate
+    // artefact, fixed by the low-threshold + most-collinear-subset selection;
+    // snapping each peak to the raw max put them on the bright pixel).
+    expect(Math.round(px[0])).toBe(63);
+    expect(calibration.slope).toBeCloseTo(0.582, 2);
+    expect(calibration.intercept).toBeCloseTo(397.9, 0);
   });
 
   it("absorbance at λmax rises strictly with concentration (Beer-Lambert)", async () => {
@@ -88,11 +90,11 @@ describe("golden dataset: materials/002 (550×60 spectral strips)", () => {
       results.push({ lambdaMax: spec.lambdaMax!, a: spec.absorbanceAtLambdaMax! });
     }
 
-    // λmax is in the orange (~580 nm — a blue dye absorbs there) and stable
-    // across the dilution series (within a few nm).
+    // λmax is in the orange-red (~627 nm — a brilliant-blue dye absorbs there)
+    // and stable across the dilution series (within a few nm).
     for (const r of results) {
-      expect(r.lambdaMax).toBeGreaterThan(560);
-      expect(r.lambdaMax).toBeLessThan(620);
+      expect(r.lambdaMax).toBeGreaterThan(600);
+      expect(r.lambdaMax).toBeLessThan(640);
     }
     const lambdas = results.map((r) => r.lambdaMax);
     expect(Math.max(...lambdas) - Math.min(...lambdas)).toBeLessThan(8);
