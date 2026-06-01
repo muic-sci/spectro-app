@@ -10,6 +10,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -21,6 +22,10 @@ import type { DataPoint } from "@/lib/analysis";
 export interface PeakMarker {
   x: number;
   label: string;
+  /** Intensity at the peak; when set, a dot is drawn on the curve at (x, y). */
+  y?: number;
+  /** Marker colour (e.g. the peak's real wavelength colour). Defaults to the warn token. */
+  color?: string;
 }
 
 export function SpectrumChart({
@@ -31,6 +36,7 @@ export function SpectrumChart({
   height = 260,
   color = "var(--accent-color)",
   yPrecision = 2,
+  reverseX = false,
 }: {
   points: DataPoint[];
   peaks?: PeakMarker[];
@@ -39,6 +45,8 @@ export function SpectrumChart({
   height?: number;
   color?: string;
   yPrecision?: number;
+  /** Reverse the x-axis (high→low), e.g. to show wavelength ascending when the calibration is flipped. */
+  reverseX?: boolean;
 }) {
   return (
     <div style={{ width: "100%", height }}>
@@ -48,6 +56,7 @@ export function SpectrumChart({
           <XAxis
             dataKey="x"
             type="number"
+            reversed={reverseX}
             domain={["dataMin", "dataMax"]}
             tick={{ fill: "var(--t3)", fontSize: 11 }}
             stroke="var(--line)"
@@ -86,11 +95,24 @@ export function SpectrumChart({
             <ReferenceLine
               key={`${pk.x}-${i}`}
               x={pk.x}
-              stroke="var(--warn)"
+              stroke={pk.color ?? "var(--warn)"}
               strokeDasharray="4 2"
-              label={{ value: pk.label, position: "top", fill: "var(--t2)", fontSize: 10 }}
+              label={{ value: pk.label, position: "top", fill: pk.color ?? "var(--t2)", fontSize: 10 }}
             />
           ))}
+          {peaks?.map((pk, i) =>
+            pk.y == null ? null : (
+              <ReferenceDot
+                key={`dot-${pk.x}-${i}`}
+                x={pk.x}
+                y={pk.y}
+                r={3}
+                fill={pk.color ?? "var(--warn)"}
+                stroke="var(--bg)"
+                strokeWidth={1}
+              />
+            ),
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>

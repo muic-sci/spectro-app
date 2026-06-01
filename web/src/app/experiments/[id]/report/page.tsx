@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { modeMeta, lightMeta } from "@/lib/experiment-meta";
 import { parseRoi, parseProfile } from "@/lib/experiment-json";
 import { deriveAnalysis } from "@/lib/experiment-analysis";
+import { wavelengthToRgb } from "@/lib/wavelength-color";
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
 import { AbsorbanceChart, type AbsorbanceSeries } from "@/components/charts/absorbance-chart";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
@@ -74,7 +75,12 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const unit = derived.standards[0]?.unit;
   const { calibration, curve, lambdaMax } = derived;
 
-  const calPeaks = calibration?.peaks.map((p) => ({ x: p.pixelPosition, label: `${p.knownWavelength}` })) ?? [];
+  const calPeaks =
+    calibration?.peaks.map((p) => ({
+      x: p.pixelPosition,
+      label: `${p.knownWavelength}`,
+      color: wavelengthToRgb(p.knownWavelength),
+    })) ?? [];
   const absSeries: AbsorbanceSeries[] = derived.standards
     .filter((s) => s.spectrum)
     .map((s, i) => ({
@@ -168,20 +174,33 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
           </div>
           {calProfile && (
             <div className="rounded-lg border border-line bg-panel p-4">
-              <SpectrumChart points={calProfile} peaks={calPeaks} xLabel="pixel column" yLabel="intensity" yPrecision={0} />
-              <p className="mt-1 text-center text-xs text-t4">
-                Lamp intensity profile; dashed lines are the detected emission peaks (nm).
+              <SpectrumChart
+                points={calProfile}
+                peaks={calPeaks}
+                xLabel="pixel column"
+                yLabel="intensity"
+                yPrecision={0}
+                reverseX={!!calibration && calibration.slope < 0}
+              />
+              {calibration && (
+                <div className="mt-1">
+                  <AlignedLampStrip
+                    imageUrl={cropped(calImage.url)}
+                    peaks={calibration.peaks}
+                    minX={calProfile[0]?.x ?? 0}
+                    maxX={calProfile[calProfile.length - 1]?.x ?? 1}
+                    slope={calibration.slope}
+                    intercept={calibration.intercept}
+                    orientation={experiment.orientation}
+                    bare
+                  />
+                </div>
+              )}
+              <p className="mt-2 text-center text-xs text-t4">
+                Lamp intensity profile; dashed lines are the detected emission peaks (nm). The strip
+                below the axis is the captured spectrum, blue → red, left to right.
               </p>
             </div>
-          )}
-          {calProfile && calibration && (
-            <AlignedLampStrip
-              imageUrl={cropped(calImage.url)}
-              peaks={calibration.peaks}
-              minX={calProfile[0]?.x ?? 0}
-              maxX={calProfile[calProfile.length - 1]?.x ?? 1}
-              orientation={experiment.orientation}
-            />
           )}
         </Section>
       )}

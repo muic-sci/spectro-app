@@ -7,6 +7,7 @@ import { SpectrumChart } from "@/components/charts/spectrum-chart";
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { AlignedLampStrip } from "@/components/wizard/aligned-lamp-strip";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
+import { wavelengthToRgb } from "@/lib/wavelength-color";
 import type { Calibration, DataPoint, Rect } from "@/lib/analysis";
 import type { CaptureRequest } from "@/lib/experiment-meta";
 
@@ -63,10 +64,25 @@ export function CalibrationStep({
   }
 
   const verdict = fitVerdict(calibration.rSquared);
-  const peakMarkers = calibration.peaks.map((p) => ({
-    x: p.pixelPosition,
-    label: `${p.knownWavelength}`,
+  // Intensity at a (sub-pixel) peak: nearest sample in the contiguous profile.
+  const x0 = profile[0]?.x ?? 0;
+  const intensityAt = (px: number) => profile[Math.min(Math.max(Math.round(px) - x0, 0), profile.length - 1)]?.y ?? 0;
+  const peakRows = calibration.peaks.map((p) => ({
+    wavelength: p.knownWavelength,
+    pixel: p.pixelPosition,
+    intensity: intensityAt(p.pixelPosition),
+    color: wavelengthToRgb(p.knownWavelength),
   }));
+  const peakMarkers = peakRows.map((p) => ({
+    x: p.pixel,
+    label: `${p.wavelength}`,
+    y: p.intensity,
+    color: p.color,
+  }));
+  // Show everything blue→red (wavelength ascending). When the lamp was captured
+  // red→violet (negative slope) the pixel axis must run high→low to match, so the
+  // graph and the strip below it stay aligned.
+  const reverseX = calibration.slope < 0;
 
   return (
     <div className="flex flex-col gap-5">
@@ -92,21 +108,73 @@ export function CalibrationStep({
           xLabel="pixel column"
           yLabel="intensity"
           yPrecision={0}
+          reverseX={reverseX}
         />
-        <p className="mt-1 text-center text-xs text-t4">
-          Dashed lines = detected peaks, labelled with their known wavelength (nm).
+        {/* The cropped lamp strip, aligned right under the chart's pixel axis. */}
+        {imageUrl && (
+          <div className="mt-1">
+            <AlignedLampStrip
+              imageUrl={`${imageUrl}/cropped?v=${version}`}
+              peaks={calibration.peaks}
+              minX={profile[0]?.x ?? 0}
+              maxX={profile[profile.length - 1]?.x ?? 1}
+              slope={calibration.slope}
+              intercept={calibration.intercept}
+              orientation={orientation}
+              bare
+            />
+          </div>
+        )}
+        <p className="mt-2 text-center text-xs text-t4">
+          Dashed lines + dots = detected peaks (dot sits on the curve at the peak), labelled with
+          their known wavelength (nm). The strip below the axis is the captured spectrum, blue
+          (short λ) → red (long λ), left to right.
         </p>
       </div>
 
-      {imageUrl && (
-        <AlignedLampStrip
-          imageUrl={`${imageUrl}/cropped?v=${version}`}
-          peaks={calibration.peaks}
-          minX={profile[0]?.x ?? 0}
-          maxX={profile[profile.length - 1]?.x ?? 1}
-          orientation={orientation}
-        />
-      )}
+      {/* Detected-peak readout — verify each dash lands on a real, bright pixel. */}
+      <div className="rounded-lg border border-line bg-panel p-4">
+        <h3 className="mb-2 text-sm font-semibold text-t2">Detected peaks</h3>
+        <div className="overflow-x-auto">
+          <table className="mono w-full min-w-[24rem] text-xs">
+            <thead>
+              <tr className="text-t4">
+                <th className="py-1 pr-4 text-left font-medium">Wavelength (nm)</th>
+                <th className="py-1 pr-4 text-right font-medium">Pixel</th>
+                <th className="py-1 pr-4 text-right font-medium">Intensity</th>
+                <th className="py-1 text-right font-medium">Fit λ (nm)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {peakRows.map((p) => {
+                const fitLambda = calibration.slope * p.pixel + calibration.intercept;
+                return (
+                  <tr key={p.wavelength} className="border-t border-line text-t2">
+                    <td className="py-1 pr-4 text-left">
+                      <span className="inline-flex items-center gap-2">
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-full"
+                          style={{ background: p.color }}
+                        />
+                        {p.wavelength}
+                      </span>
+                    </td>
+                    <td className="py-1 pr-4 text-right">{p.pixel.toFixed(1)}</td>
+                    <td className="py-1 pr-4 text-right">{p.intensity.toFixed(0)}</td>
+                    <td className="py-1 text-right text-t3">{fitLambda.toFixed(1)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-xs text-t4">
+          <span className="text-t3">Pixel</span> is where each line was detected;{" "}
+          <span className="text-t3">Intensity</span> is the profile value there (should be near a
+          local maximum). <span className="text-t3">Fit λ</span> is what the linear calibration maps
+          that pixel back to — close to the known wavelength ⇒ a good fit.
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 gap-5 rounded-lg border border-line bg-panel p-5 sm:grid-cols-4">
         <Readout label="Slope" value={calibration.slope.toFixed(3)} unit="nm/px" />
