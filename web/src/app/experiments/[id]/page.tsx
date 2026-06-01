@@ -125,6 +125,8 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             experimentId={experiment!.id}
             profile={derived.blankProfile}
             imageUrl={blankImage?.url || undefined}
+            calibration={derived.calibration}
+            version={experiment!.updatedAt.getTime()}
             phoneOnline={phoneOnline}
             pending={pending}
             roi={roi}

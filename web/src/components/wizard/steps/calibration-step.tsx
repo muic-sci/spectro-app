@@ -3,9 +3,8 @@
  * 5 emission lines and fits pixel→λ. We show the lamp profile with the peaks
  * marked, the slope/intercept/R² readout, and a plain-language verdict.
  */
-import { SpectrumChart } from "@/components/charts/spectrum-chart";
 import { CaptureControls } from "@/components/wizard/capture-controls";
-import { AlignedLampStrip } from "@/components/wizard/aligned-lamp-strip";
+import { SpectrumWithStrip } from "@/components/wizard/spectrum-with-strip";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
 import { wavelengthToRgb } from "@/lib/wavelength-color";
 import type { Calibration, DataPoint, Rect } from "@/lib/analysis";
@@ -73,16 +72,6 @@ export function CalibrationStep({
     intensity: intensityAt(p.pixelPosition),
     color: wavelengthToRgb(p.knownWavelength),
   }));
-  const peakMarkers = peakRows.map((p) => ({
-    x: p.pixel,
-    label: `${p.wavelength}`,
-    y: p.intensity,
-    color: p.color,
-  }));
-  // Show everything blue→red (wavelength ascending). When the lamp was captured
-  // red→violet (negative slope) the pixel axis must run high→low to match, so the
-  // graph and the strip below it stay aligned.
-  const reverseX = calibration.slope < 0;
 
   return (
     <div className="flex flex-col gap-5">
@@ -101,36 +90,19 @@ export function CalibrationStep({
         )}
       </div>
 
-      <div className="rounded-lg border border-line bg-panel p-4">
-        <SpectrumChart
-          points={profile}
-          peaks={peakMarkers}
-          xLabel="pixel column"
-          yLabel="intensity"
-          yPrecision={0}
-          reverseX={reverseX}
-        />
-        {/* The cropped lamp strip, aligned right under the chart's pixel axis. */}
-        {imageUrl && (
-          <div className="mt-1">
-            <AlignedLampStrip
-              imageUrl={`${imageUrl}/cropped?v=${version}`}
-              peaks={calibration.peaks}
-              minX={profile[0]?.x ?? 0}
-              maxX={profile[profile.length - 1]?.x ?? 1}
-              slope={calibration.slope}
-              intercept={calibration.intercept}
-              orientation={orientation}
-              bare
-            />
-          </div>
-        )}
-        <p className="mt-2 text-center text-xs text-t4">
-          Dashed lines + dots = detected peaks (dot sits on the curve at the peak), labelled with
-          their known wavelength (nm). The strip below the axis is the captured spectrum, blue
-          (short λ) → red (long λ), left to right.
-        </p>
-      </div>
+      <SpectrumWithStrip
+        points={profile}
+        calibration={calibration}
+        croppedImageUrl={imageUrl ? `${imageUrl}/cropped?v=${version}` : undefined}
+        orientation={orientation}
+        caption={
+          <>
+            Dashed lines + dots = detected peaks (dot sits on the curve at the peak), labelled with
+            their known wavelength (nm). The strip below the axis is the captured spectrum, blue
+            (short λ) → red (long λ), left to right.
+          </>
+        }
+      />
 
       {/* Detected-peak readout — verify each dash lands on a real, bright pixel. */}
       <div className="rounded-lg border border-line bg-panel p-4">

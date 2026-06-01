@@ -3,15 +3,18 @@
  * absorbance is measured against. We show its intensity profile once captured.
  */
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
+import { SpectrumWithStrip } from "@/components/wizard/spectrum-with-strip";
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, StatusChip } from "@/components/ui/primitives";
-import type { DataPoint, Rect } from "@/lib/analysis";
+import type { Calibration, DataPoint, Rect } from "@/lib/analysis";
 import type { CaptureRequest } from "@/lib/experiment-meta";
 
 export function BlankStep({
   experimentId,
   profile,
   imageUrl,
+  calibration,
+  version,
   phoneOnline,
   pending,
   roi,
@@ -20,6 +23,9 @@ export function BlankStep({
   experimentId: string;
   profile: DataPoint[] | null;
   imageUrl?: string;
+  /** Calibration (from the lamp step) gives the wavelength axis + blue/red flip. */
+  calibration: Calibration | null;
+  version: number;
   phoneOnline: boolean;
   pending: CaptureRequest | null;
   roi: Rect | null;
@@ -54,12 +60,28 @@ export function BlankStep({
         <Icon name="check" size={12} /> Blank captured — I₀ recorded
       </StatusChip>
 
-      <div className="rounded-lg border border-line bg-panel p-4">
-        <SpectrumChart points={profile} xLabel="pixel column" yLabel="intensity" yPrecision={0} />
-        <p className="mt-1 text-center text-xs text-t4">
-          The incident-light profile (I₀). Absorbance compares each sample against this.
-        </p>
-      </div>
+      {calibration ? (
+        <SpectrumWithStrip
+          points={profile}
+          calibration={calibration}
+          croppedImageUrl={imageUrl ? `${imageUrl}/cropped?v=${version}` : undefined}
+          orientation={orientation}
+          caption={
+            <>
+              The incident-light profile (I₀); absorbance compares each sample against this. Coloured
+              lines mark the calibration wavelengths (nm); the strip below the axis is the captured
+              spectrum, blue (short λ) → red (long λ), left to right.
+            </>
+          }
+        />
+      ) : (
+        <div className="rounded-lg border border-line bg-panel p-4">
+          <SpectrumChart points={profile} xLabel="pixel column" yLabel="intensity" yPrecision={0} />
+          <p className="mt-1 text-center text-xs text-t4">
+            The incident-light profile (I₀). Absorbance compares each sample against this.
+          </p>
+        </div>
+      )}
 
       {imageUrl && (
         <div className="flex items-center gap-3 text-xs text-t3">
