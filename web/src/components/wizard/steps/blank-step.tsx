@@ -5,7 +5,7 @@
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, StatusChip } from "@/components/ui/primitives";
-import type { DataPoint } from "@/lib/analysis";
+import type { DataPoint, Rect } from "@/lib/analysis";
 import type { CaptureRequest } from "@/lib/experiment-meta";
 
 export function BlankStep({
@@ -14,12 +14,16 @@ export function BlankStep({
   imageUrl,
   phoneOnline,
   pending,
+  roi,
+  orientation,
 }: {
   experimentId: string;
   profile: DataPoint[] | null;
   imageUrl?: string;
   phoneOnline: boolean;
   pending: CaptureRequest | null;
+  roi: Rect | null;
+  orientation: "horizontal" | "vertical";
 }) {
   if (!profile) {
     return (
@@ -37,6 +41,8 @@ export function BlankStep({
           cta="Capture blank"
           phoneOnline={phoneOnline}
           pending={pending}
+          roi={roi}
+          orientation={orientation}
         />
       </div>
     );
@@ -72,6 +78,8 @@ export function BlankStep({
             cta="Re-capture blank"
             phoneOnline={phoneOnline}
             pending={pending}
+            roi={roi}
+            orientation={orientation}
           />
         </div>
       </details>

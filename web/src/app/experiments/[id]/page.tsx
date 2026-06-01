@@ -60,6 +60,11 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
   const calProfile = calImage ? parseProfile(calImage.intensityProfile) : null;
   const blankImage = experiment.images.find((im) => im.role === "blank");
 
+  // Shared with the capture controls / ROI editor so the browser extracts the
+  // same region/orientation the server stores.
+  const roi = parseRoi(experiment.roi);
+  const imageList = experiment.images.map((im) => ({ id: im.id, role: im.role }));
+
   const phoneOnline = isPhoneOnline(experiment.id);
   const pending = parseCaptureRequest(experiment.pendingCapture);
 
@@ -92,10 +97,10 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
         return (
           <RoiStep
             experimentId={experiment!.id}
-            roi={parseRoi(experiment!.roi)}
+            roi={roi}
             orientation={experiment!.orientation}
+            images={imageList}
             calibrationImageUrl={calImage?.url || null}
-            version={experiment!.updatedAt.getTime()}
             phoneOnline={phoneOnline}
             pending={pending}
           />
@@ -111,6 +116,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             orientation={experiment!.orientation}
             phoneOnline={phoneOnline}
             pending={pending}
+            roi={roi}
           />
         );
       case "blank":
@@ -121,6 +127,8 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             imageUrl={blankImage?.url || undefined}
             phoneOnline={phoneOnline}
             pending={pending}
+            roi={roi}
+            orientation={experiment!.orientation}
           />
         );
       case "standards":
@@ -131,6 +139,8 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             lambdaMax={derived.lambdaMax}
             phoneOnline={phoneOnline}
             pending={pending}
+            roi={roi}
+            orientation={experiment!.orientation}
           />
         );
       case "absorbanceReview":
@@ -142,6 +152,8 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             derived={derived}
             phoneOnline={phoneOnline}
             pending={pending}
+            roi={roi}
+            orientation={experiment!.orientation}
           />
         );
       case "results":

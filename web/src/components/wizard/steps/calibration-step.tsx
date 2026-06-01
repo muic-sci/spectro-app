@@ -7,7 +7,7 @@ import { SpectrumChart } from "@/components/charts/spectrum-chart";
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { AlignedLampStrip } from "@/components/wizard/aligned-lamp-strip";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
-import type { Calibration, DataPoint } from "@/lib/analysis";
+import type { Calibration, DataPoint, Rect } from "@/lib/analysis";
 import type { CaptureRequest } from "@/lib/experiment-meta";
 
 /** Plain-language verdict on the fit quality (web-ux-brief.md §5 L3.2). */
@@ -27,6 +27,7 @@ export function CalibrationStep({
   orientation,
   phoneOnline,
   pending,
+  roi,
 }: {
   experimentId: string;
   calibration: Calibration | null;
@@ -36,6 +37,7 @@ export function CalibrationStep({
   orientation: "horizontal" | "vertical";
   phoneOnline: boolean;
   pending: CaptureRequest | null;
+  roi: Rect | null;
 }) {
   if (!calibration || !profile) {
     return (
@@ -53,6 +55,8 @@ export function CalibrationStep({
           cta="Capture lamp"
           phoneOnline={phoneOnline}
           pending={pending}
+          roi={roi}
+          orientation={orientation}
         />
       </div>
     );
@@ -136,6 +140,8 @@ export function CalibrationStep({
             cta="Re-capture lamp"
             phoneOnline={phoneOnline}
             pending={pending}
+            roi={roi}
+            orientation={orientation}
           />
         </div>
       </details>

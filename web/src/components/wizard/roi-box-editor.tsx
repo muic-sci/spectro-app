@@ -1,17 +1,25 @@
 "use client";
 
 /**
- * Drag-to-select ROI editor (web-ux-brief.md §7). The student drags a box over
- * the captured lamp image to mark the spectrum strip; the box is stored in image
- * pixel coordinates. Works with mouse and touch (pointer events). Saving
- * re-extracts every captured profile + recomputes the calibration for the new
- * region (setRoiAction).
+ * ROI + orientation controller (web-ux-brief.md §7). The student picks which way
+ * the spectrum runs and drags a box over the captured lamp image to mark the
+ * strip; the box is stored in image pixel coordinates (mouse + touch via pointer
+ * events).
+ *
+ * Everything re-extracts IN THE BROWSER: on a Save / orientation change we decode
+ * every stored image, re-extract its profile + ROI crop and recompute the
+ * calibration (analysis-client.reextractAll), then POST the results to
+ * persistReextractAction (DB + crop storage only). The server does no image
+ * work, so the horizontal/vertical toggle is instant regardless of server load.
+ * The "region used for analysis" preview is drawn on a <canvas> from the loaded
+ * image — no round-trip to a server crop.
  */
-import { useCallback, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
 import { Icon } from "@/components/ui/primitives";
-import { setRoiAction } from "@/app/experiments/[id]/actions";
+import { reextractAll } from "@/lib/analysis-client";
+import { persistReextractAction } from "@/app/experiments/[id]/actions";
 
 interface Rect {
   left: number;
@@ -20,26 +28,32 @@ interface Rect {
   height: number;
 }
 type Mode = "move" | "nw" | "ne" | "sw" | "se" | "draw";
+type Orientation = "horizontal" | "vertical";
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const MIN = 8; // minimum box size in image px
 
 export function RoiBoxEditor({
   experimentId,
+  images,
   imageUrl,
   initialRoi,
-  orientation = "horizontal",
+  initialOrientation = "horizontal",
 }: {
   experimentId: string;
+  /** Every stored image, so a ROI/orientation change re-extracts all of them. */
+  images: { id: string; role: string }[];
   imageUrl: string;
   initialRoi: Rect | null;
-  orientation?: "horizontal" | "vertical";
+  initialOrientation?: Orientation;
 }) {
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const previewRef = useRef<HTMLCanvasElement>(null);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  const [orientation, setOrientation] = useState<Orientation>(initialOrientation);
   const [box, setBox] = useState<Rect | null>(initialRoi);
-  const [, startTransition] = useTransition();
   const [saving, setSaving] = useState(false);
   const drag = useRef<{ mode: Mode; startX: number; startY: number; start: Rect } | null>(null);
 
@@ -79,6 +93,26 @@ export function RoiBoxEditor({
       );
     }
   }
+
+  // Redraw the cropped-region preview whenever the box (or image) changes.
+  useEffect(() => {
+    const canvas = previewRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img || !natural || !box) return;
+    const sx = clamp(Math.round(box.left), 0, natural.w - 1);
+    const sy = clamp(Math.round(box.top), 0, natural.h - 1);
+    const sw = clamp(Math.round(box.width), 1, natural.w - sx);
+    const sh = clamp(Math.round(box.height), 1, natural.h - sy);
+    canvas.width = sw;
+    canvas.height = sh;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    try {
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    } catch {
+      // image not yet decodable — the next render will retry
+    }
+  }, [box, natural]);
 
   function startDrag(mode: Mode, e: React.PointerEvent) {
     if (!natural) return;
@@ -161,33 +195,98 @@ export function RoiBoxEditor({
     drag.current = null;
   }
 
-  function persist(full: boolean) {
+  /**
+   * Re-extract every profile + crop for `nextRoi`/`nextOrientation` in the
+   * browser, then persist. `full` ignores the drawn box and uses the whole strip.
+   */
+  async function commit(full: boolean, nextOrientation: Orientation) {
+    if (saving || !natural) return;
     setSaving(true);
-    const fd = new FormData();
-    fd.append("experimentId", experimentId);
-    if (full || !box) {
-      fd.append("mode", "full");
-    } else {
-      fd.append("mode", "custom");
-      fd.append("left", String(Math.round(box.left)));
-      fd.append("top", String(Math.round(box.top)));
-      fd.append("width", String(Math.round(box.width)));
-      fd.append("height", String(Math.round(box.height)));
-    }
-    startTransition(async () => {
-      await setRoiAction(fd);
-      setSaving(false);
+    try {
+      const roi: Rect | null =
+        full || !box
+          ? null
+          : {
+              left: Math.round(box.left),
+              top: Math.round(box.top),
+              width: Math.round(box.width),
+              height: Math.round(box.height),
+            };
+
+      const { profiles, crops, calibration } = await reextractAll({
+        experimentId,
+        images,
+        roi,
+        vertical: nextOrientation === "vertical",
+      });
+
+      const fd = new FormData();
+      fd.append("experimentId", experimentId);
+      fd.append("orientation", nextOrientation);
+      if (roi == null) {
+        fd.append("mode", "full");
+      } else {
+        fd.append("mode", "custom");
+        fd.append("left", String(roi.left));
+        fd.append("top", String(roi.top));
+        fd.append("width", String(roi.width));
+        fd.append("height", String(roi.height));
+      }
+      fd.append("profiles", JSON.stringify(profiles));
+      if (calibration) fd.append("calibration", JSON.stringify(calibration));
+      for (const c of crops) fd.append(`crop_${c.imageId}`, c.blob, `${c.imageId}.jpg`);
+
+      await persistReextractAction(fd);
       router.refresh();
-    });
+    } catch {
+      // leave the UI as-is; the student can retry
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function chooseOrientation(next: Orientation) {
+    if (next === orientation || saving) return;
+    setOrientation(next);
+    void commit(false, next);
+  }
+
+  function useFullStrip() {
+    if (natural) setBox({ left: 0, top: 0, width: natural.w, height: natural.h });
+    void commit(true, orientation);
   }
 
   // Box as % of the image, so it tracks the responsively-sized <img>.
   const pct = (v: number, of: number) => `${(v / of) * 100}%`;
-  const handle =
-    "absolute h-3 w-3 -m-1.5 rounded-full border border-bg bg-accent touch-none";
+  const handle = "absolute h-3 w-3 -m-1.5 rounded-full border border-bg bg-accent touch-none";
+  const orientations: { value: Orientation; label: string }[] = [
+    { value: "horizontal", label: "↔ Horizontal" },
+    { value: "vertical", label: "↕ Vertical" },
+  ];
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <span className="text-xs uppercase tracking-wide text-t3">Spectrum runs</span>
+        <div className="inline-flex overflow-hidden rounded-md border border-line">
+          {orientations.map((o, i) => (
+            <button
+              key={o.value}
+              type="button"
+              disabled={saving}
+              onClick={() => chooseOrientation(o.value)}
+              className={`px-3 py-1.5 text-sm disabled:opacity-60 ${i > 0 ? "border-l border-line" : ""} ${
+                orientation === o.value
+                  ? "bg-accent text-accent-ink"
+                  : "bg-panel text-t2 hover:text-t1"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div
         ref={wrapRef}
         className="relative block touch-none overflow-hidden rounded-lg border border-line bg-black"
@@ -197,6 +296,7 @@ export function RoiBoxEditor({
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- dynamic owner-scoped blob */}
         <img
+          ref={imgRef}
           src={imageUrl}
           alt="Captured spectrum to mark the region on"
           className="block w-full select-none"
@@ -228,10 +328,10 @@ export function RoiBoxEditor({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="primary" isDisabled={saving || !box} onClick={() => persist(false)}>
+        <Button variant="primary" isDisabled={saving || !box} onClick={() => commit(false, orientation)}>
           <Icon name="check" size={16} /> {saving ? "Saving…" : "Save region"}
         </Button>
-        <Button variant="ghost" isDisabled={saving} onClick={() => persist(true)}>
+        <Button variant="ghost" isDisabled={saving} onClick={useFullStrip}>
           Use full strip
         </Button>
         {box && (
@@ -245,6 +345,18 @@ export function RoiBoxEditor({
         Drag a box around the bright spectrum strip — or drag the handles to adjust. This region is
         used for every measurement.
       </p>
+
+      <div className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-4">
+        <h3 className="text-sm font-semibold text-t1">Region used for analysis</h3>
+        <p className="text-xs text-t3">
+          This is exactly the cropped area the analysis reads. If it isn&apos;t your spectrum strip,
+          re-draw the box above and save again.
+        </p>
+        <canvas
+          ref={previewRef}
+          className="max-h-32 w-auto max-w-full self-start rounded border border-line bg-black"
+        />
+      </div>
     </div>
   );
 }

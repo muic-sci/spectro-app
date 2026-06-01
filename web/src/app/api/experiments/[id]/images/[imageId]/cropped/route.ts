@@ -1,15 +1,19 @@
 /**
- * Serve a captured image cropped to the experiment's ROI — i.e. *exactly* the
- * pixels the analysis profiles (same EXIF auto-orient + same clamp as
- * extractIntensityProfile). Lets the student confirm the right region was
- * selected. Owner-scoped. ROI changes bust the cache via a ?v= param.
+ * Serve a captured image cropped to the experiment's ROI — the "region used for
+ * analysis" preview.
+ *
+ * Primary path: serve the crop the *browser* rendered and uploaded (stored under
+ * croppedKey(imageId)) — no server-side image work. Fallback: if no stored crop
+ * exists (e.g. a phone-pipeline image, or pre-client data), cut it on demand
+ * with sharp using the same EXIF auto-orient + ROI clamp the analysis uses.
+ * Owner-scoped. ROI changes bust the cache via a ?v= param.
  */
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { requireUserId } from "@/auth-helpers";
 import { getExperiment } from "@/lib/experiments";
 import { prisma } from "@/lib/db";
-import { readImageBytes } from "@/lib/storage";
+import { readImageBytes, croppedKey } from "@/lib/storage";
 import { parseRoi } from "@/lib/experiment-json";
 import { DEFAULT_ROI, roiPixelBounds } from "@/lib/analysis";
 
@@ -28,6 +32,16 @@ export async function GET(
     select: { id: true },
   });
   if (!image) return new NextResponse("Not found", { status: 404 });
+
+  // Primary: the browser-rendered crop, stored alongside the image.
+  try {
+    const stored = await readImageBytes(croppedKey(imageId));
+    return new NextResponse(new Uint8Array(stored), {
+      headers: { "content-type": "image/jpeg", "cache-control": "private, max-age=3600" },
+    });
+  } catch {
+    // No stored crop — fall through to an on-demand server crop.
+  }
 
   let bytes: Buffer;
   try {

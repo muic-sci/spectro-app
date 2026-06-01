@@ -19,6 +19,15 @@ function filePath(key: string): string {
   return path.join(STORAGE_DIR, key);
 }
 
+/**
+ * Storage key for the ROI-cropped JPEG that goes with an image. The browser
+ * renders the crop and uploads it; the cropped route serves these bytes (no
+ * server-side sharp crop). Stays within the alnum key constraint above.
+ */
+export function croppedKey(imageId: string): string {
+  return `${imageId}crop`;
+}
+
 export async function saveImageBytes(key: string, bytes: Buffer): Promise<void> {
   await mkdir(STORAGE_DIR, { recursive: true });
   await writeFile(filePath(key), bytes);

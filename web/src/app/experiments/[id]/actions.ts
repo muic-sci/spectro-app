@@ -3,13 +3,25 @@
 import { revalidatePath } from "next/cache";
 import { requireUserId } from "@/auth-helpers";
 import { getExperiment } from "@/lib/experiments";
-import { processCapture, reextractExperiment } from "@/lib/capture";
+import { persistClientCapture, persistClientReextract } from "@/lib/capture";
 import { deleteImageBytes } from "@/lib/storage";
+import { parseCalibration } from "@/lib/experiment-json";
 import { publish } from "@/lib/realtime";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
 import type { CaptureRequest } from "@/lib/experiment-meta";
+import type { Calibration, DataPoint, SaturationResult } from "@/lib/analysis";
 import type { SpectralImageRole, WorkflowStep } from "@/generated/prisma/enums";
+
+/** Safely JSON.parse a FormData field, returning null on absence/parse error. */
+function safeJson(v: FormDataEntryValue | null): unknown {
+  if (typeof v !== "string" || v.length === 0) return null;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return null;
+  }
+}
 
 const CAPTURE_ROLES: SpectralImageRole[] = ["calibration", "blank", "standard", "unknown"];
 
@@ -24,10 +36,12 @@ export type CaptureState = {
 };
 
 /**
- * Upload a captured photo and run it through the analysis pipeline. This is the
- * web/dev stand-in for the paired phone's multipart POST.
+ * Web-upload path: persist a capture the browser already analysed
+ * (analysis-client.analyzeCaptureBlob). The full image, the ROI crop, the
+ * profile, the saturation check and (for the lamp) the calibration all come from
+ * the client — the server only stores them. No sharp decode here.
  */
-export async function uploadCaptureAction(
+export async function persistCaptureAction(
   _prev: CaptureState,
   formData: FormData,
 ): Promise<CaptureState> {
@@ -60,69 +74,117 @@ export async function uploadCaptureAction(
     }
   }
 
+  const parsedProfile = safeJson(formData.get("profile"));
+  if (!Array.isArray(parsedProfile) || parsedProfile.length === 0) {
+    return { error: "Couldn't read the analysed profile — check the ROI and retry." };
+  }
+  const profile = parsedProfile as DataPoint[];
+
+  const parsedSat = safeJson(formData.get("saturation")) as SaturationResult | null;
+  const saturation: SaturationResult = parsedSat ?? {
+    saturatedCount: 0,
+    totalCount: 0,
+    threshold: 250,
+    fraction: 0,
+    isSaturated: false,
+  };
+
+  const calibration: Calibration | undefined =
+    role === "calibration" ? parseCalibration(safeJson(formData.get("calibration"))) ?? undefined : undefined;
+
+  const cropField = formData.get("crop");
+  const cropBytes =
+    cropField instanceof File && cropField.size > 0
+      ? Buffer.from(await cropField.arrayBuffer())
+      : undefined;
+
   try {
     const bytes = Buffer.from(await file.arrayBuffer());
-    const res = await processCapture({
+    const res = await persistClientCapture({
       experimentId: id,
-      roi: experiment.roi,
       role,
       bytes,
-      vertical: experiment.orientation === "vertical",
+      profile,
+      saturation,
+      calibration,
+      cropBytes,
       concentration,
       unit,
     });
-    publish(id, { type: "captured", data: { role, saturatedPct: res.saturation.fraction * 100 } });
+    const saturatedPct = saturation.fraction * 100;
+    publish(id, { type: "captured", data: { role, saturatedPct } });
     revalidatePath(`/experiments/${id}`);
     return {
       ok: true,
-      saturatedPct: res.saturation.fraction * 100,
+      saturatedPct,
       note: res.calibration ? `Fit R² ${res.calibration.rSquared.toFixed(3)}` : undefined,
     };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Couldn't process that image." };
+    return { error: e instanceof Error ? e.message : "Couldn't save that image." };
   }
 }
 
-/** L3.1 — set the ROI all measurements share (or clear it → full-frame default). */
-export async function setRoiAction(formData: FormData) {
+/**
+ * Web path: commit a browser re-extraction (analysis-client.reextractAll) after
+ * the ROI or orientation changed. Stores the new ROI/orientation, the
+ * re-extracted profiles, the new ROI crops and the recomputed calibration — all
+ * computed in the browser. Replaces the old server-side sharp re-extraction.
+ */
+export async function persistReextractAction(formData: FormData) {
   const userId = await requireUserId();
   const id = String(formData.get("experimentId") ?? "");
-  const experiment = await getExperiment(id, userId);
+  const experiment = await prisma.experiment.findFirst({
+    where: { id, userId },
+    select: { id: true, orientation: true, images: { select: { id: true } } },
+  });
   if (!experiment) return;
 
-  const useFull = formData.get("mode") === "full";
+  // ROI (full → null default, else the drawn box).
   let roi: Prisma.InputJsonValue | typeof Prisma.DbNull;
-  if (useFull) {
-    roi = Prisma.DbNull; // null → DEFAULT_ROI (full strip), preserved for pre-cropped images
+  if (formData.get("mode") === "full") {
+    roi = Prisma.DbNull;
   } else {
     const left = Number(formData.get("left"));
     const top = Number(formData.get("top"));
     const width = Number(formData.get("width"));
     const height = Number(formData.get("height"));
     if (![left, top, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
-      return; // invalid — leave ROI unchanged
+      return; // invalid — leave unchanged
     }
     roi = { left, top, width, height };
   }
 
-  await prisma.experiment.updateMany({ where: { id, userId }, data: { roi } });
-  // The ROI defines every measurement's region — re-extract captured profiles
-  // and recompute the calibration so they reflect the new box.
-  await reextractExperiment(id);
-  publish(id, { type: "captured" });
-  revalidatePath(`/experiments/${id}`);
-}
+  const orientationRaw = String(formData.get("orientation") ?? "");
+  const orientation =
+    orientationRaw === "horizontal" || orientationRaw === "vertical"
+      ? orientationRaw
+      : experiment.orientation;
 
-/** L3.1 — set the spectrum orientation (which way the strip runs). */
-export async function setOrientationAction(formData: FormData) {
-  const userId = await requireUserId();
-  const id = String(formData.get("experimentId") ?? "");
-  const orientation = String(formData.get("orientation") ?? "");
-  if (orientation !== "horizontal" && orientation !== "vertical") return;
+  await prisma.experiment.updateMany({ where: { id, userId }, data: { roi, orientation } });
 
-  await prisma.experiment.updateMany({ where: { id, userId }, data: { orientation } });
-  // Orientation changes how profiles are extracted — recompute everything.
-  await reextractExperiment(id);
+  // Browser-computed profiles + crops, scoped to images that belong here.
+  const known = new Set(experiment.images.map((im) => im.id));
+  const rawProfiles = safeJson(formData.get("profiles"));
+  const profiles = Array.isArray(rawProfiles)
+    ? rawProfiles
+        .filter(
+          (p): p is { imageId: string; points: DataPoint[] } =>
+            !!p && known.has(p.imageId) && Array.isArray(p.points),
+        )
+        .map((p) => ({ imageId: p.imageId, points: p.points }))
+    : [];
+
+  const crops: { imageId: string; bytes: Buffer }[] = [];
+  for (const imageId of known) {
+    const f = formData.get(`crop_${imageId}`);
+    if (f instanceof File && f.size > 0) {
+      crops.push({ imageId, bytes: Buffer.from(await f.arrayBuffer()) });
+    }
+  }
+
+  const calibration = parseCalibration(safeJson(formData.get("calibration"))) ?? undefined;
+
+  await persistClientReextract({ experimentId: id, profiles, crops, calibration });
   publish(id, { type: "captured" });
   revalidatePath(`/experiments/${id}`);
 }

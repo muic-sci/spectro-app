@@ -14,12 +14,20 @@ import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
 import { Icon, StatusChip } from "@/components/ui/primitives";
 import {
-  uploadCaptureAction,
+  persistCaptureAction,
   requestCaptureAction,
   cancelCaptureAction,
   type CaptureState,
 } from "@/app/experiments/[id]/actions";
+import { analyzeCaptureBlob } from "@/lib/analysis-client";
 import type { CaptureRequest } from "@/lib/experiment-meta";
+
+interface Rect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
 
 export function CaptureControls({
   experimentId,
@@ -28,6 +36,8 @@ export function CaptureControls({
   phoneOnline = false,
   pending = null,
   needsConcentration = false,
+  roi = null,
+  orientation = "horizontal",
 }: {
   experimentId: string;
   role: "calibration" | "blank" | "standard" | "unknown";
@@ -35,6 +45,10 @@ export function CaptureControls({
   phoneOnline?: boolean;
   pending?: CaptureRequest | null;
   needsConcentration?: boolean;
+  /** Current ROI (image px) so the browser extracts the same region the server stores. */
+  roi?: Rect | null;
+  /** Spectrum orientation — drives column-vs-row averaging in the browser. */
+  orientation?: "horizontal" | "vertical";
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -160,11 +174,28 @@ export function CaptureControls({
             isDisabled={busy !== null || !file || !concOk}
             onClick={() =>
               run("upload", async () => {
-                const fd = baseForm();
-                fd.append("file", file as File);
-                const res = await uploadCaptureAction({}, fd);
-                setResult(res);
-                setFile(null);
+                try {
+                  // Decode + extract + calibrate + crop in the browser; the
+                  // server only persists what we send.
+                  const computed = await analyzeCaptureBlob(file as File, {
+                    role,
+                    roi,
+                    vertical: orientation === "vertical",
+                  });
+                  const fd = baseForm();
+                  fd.append("file", file as File);
+                  fd.append("crop", computed.cropBlob, "crop.jpg");
+                  fd.append("profile", JSON.stringify(computed.profile));
+                  fd.append("saturation", JSON.stringify(computed.saturation));
+                  if (computed.calibration) {
+                    fd.append("calibration", JSON.stringify(computed.calibration));
+                  }
+                  const res = await persistCaptureAction({}, fd);
+                  setResult(res);
+                  if (res.ok) setFile(null);
+                } catch {
+                  setResult({ error: "Couldn't analyse that photo in your browser — try another." });
+                }
               })
             }
           >

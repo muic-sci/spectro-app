@@ -7,6 +7,7 @@ import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, StatusChip } from "@/components/ui/primitives";
 import { deleteStandardAction } from "@/app/experiments/[id]/actions";
 import type { StandardAnalysis } from "@/lib/experiment-analysis";
+import type { Rect } from "@/lib/analysis";
 import type { CaptureRequest } from "@/lib/experiment-meta";
 
 export function StandardsStep({
@@ -15,12 +16,16 @@ export function StandardsStep({
   lambdaMax,
   phoneOnline,
   pending,
+  roi,
+  orientation,
 }: {
   experimentId: string;
   standards: StandardAnalysis[];
   lambdaMax: number | null;
   phoneOnline: boolean;
   pending: CaptureRequest | null;
+  roi: Rect | null;
+  orientation: "horizontal" | "vertical";
 }) {
   const enough = standards.length >= 2;
 
@@ -97,6 +102,8 @@ export function StandardsStep({
           needsConcentration
           phoneOnline={phoneOnline}
           pending={pending}
+          roi={roi}
+          orientation={orientation}
         />
       </div>
     </div>

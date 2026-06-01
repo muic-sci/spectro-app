@@ -123,6 +123,13 @@ model Experiment {
   // highest-concentration standard; set when the student adjusts it.
   lambdaMax Float?
 
+  // Persisted Beer-Lambert calibration curve (the derived result), written by
+  // persistDerived after each capture/re-extract:
+  //   { slope, intercept, rSquared, lambdaMax, dataPoints: [{x: conc, y: A}] }.
+  // The wizard still recomputes from profiles for display (deriveAnalysis); this
+  // is the durable record (export / report) — null until ≥2 usable standards.
+  calibrationCurve Json?
+
   images    SpectralImage[]
   standards Standard[]
   unknowns  Unknown[]

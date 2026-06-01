@@ -9,6 +9,7 @@ import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
 import { deleteUnknownAction } from "@/app/experiments/[id]/actions";
 import type { DerivedAnalysis } from "@/lib/experiment-analysis";
+import type { Rect } from "@/lib/analysis";
 import type { CaptureRequest } from "@/lib/experiment-meta";
 
 export function UnknownStep({
@@ -16,11 +17,15 @@ export function UnknownStep({
   derived,
   phoneOnline,
   pending,
+  roi,
+  orientation,
 }: {
   experimentId: string;
   derived: DerivedAnalysis;
   phoneOnline: boolean;
   pending: CaptureRequest | null;
+  roi: Rect | null;
+  orientation: "horizontal" | "vertical";
 }) {
   const { curve, lambdaMax, unknowns, standards } = derived;
   const unit = standards[0]?.unit;
@@ -117,6 +122,8 @@ export function UnknownStep({
           cta="Capture unknown"
           phoneOnline={phoneOnline}
           pending={pending}
+          roi={roi}
+          orientation={orientation}
         />
       </div>
     </div>
