@@ -5,8 +5,8 @@
  */
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { SpectrumWithStrip } from "@/components/wizard/spectrum-with-strip";
+import { DetectedPeaksTable } from "@/components/wizard/detected-peaks-table";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
-import { wavelengthToRgb } from "@/lib/wavelength-color";
 import type { Calibration, DataPoint, Rect } from "@/lib/analysis";
 import type { CaptureRequest } from "@/lib/experiment-meta";
 
@@ -63,15 +63,6 @@ export function CalibrationStep({
   }
 
   const verdict = fitVerdict(calibration.rSquared);
-  // Intensity at a (sub-pixel) peak: nearest sample in the contiguous profile.
-  const x0 = profile[0]?.x ?? 0;
-  const intensityAt = (px: number) => profile[Math.min(Math.max(Math.round(px) - x0, 0), profile.length - 1)]?.y ?? 0;
-  const peakRows = calibration.peaks.map((p) => ({
-    wavelength: p.knownWavelength,
-    pixel: p.pixelPosition,
-    intensity: intensityAt(p.pixelPosition),
-    color: wavelengthToRgb(p.knownWavelength),
-  }));
 
   return (
     <div className="flex flex-col gap-5">
@@ -105,48 +96,7 @@ export function CalibrationStep({
       />
 
       {/* Detected-peak readout — verify each dash lands on a real, bright pixel. */}
-      <div className="rounded-lg border border-line bg-panel p-4">
-        <h3 className="mb-2 text-sm font-semibold text-t2">Detected peaks</h3>
-        <div className="overflow-x-auto">
-          <table className="mono w-full min-w-[24rem] text-xs">
-            <thead>
-              <tr className="text-t4">
-                <th className="py-1 pr-4 text-left font-medium">Wavelength (nm)</th>
-                <th className="py-1 pr-4 text-right font-medium">Pixel</th>
-                <th className="py-1 pr-4 text-right font-medium">Intensity</th>
-                <th className="py-1 text-right font-medium">Fit λ (nm)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {peakRows.map((p) => {
-                const fitLambda = calibration.slope * p.pixel + calibration.intercept;
-                return (
-                  <tr key={p.wavelength} className="border-t border-line text-t2">
-                    <td className="py-1 pr-4 text-left">
-                      <span className="inline-flex items-center gap-2">
-                        <span
-                          className="inline-block h-2.5 w-2.5 rounded-full"
-                          style={{ background: p.color }}
-                        />
-                        {p.wavelength}
-                      </span>
-                    </td>
-                    <td className="py-1 pr-4 text-right">{p.pixel.toFixed(1)}</td>
-                    <td className="py-1 pr-4 text-right">{p.intensity.toFixed(0)}</td>
-                    <td className="py-1 text-right text-t3">{fitLambda.toFixed(1)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-2 text-xs text-t4">
-          <span className="text-t3">Pixel</span> is where each line was detected;{" "}
-          <span className="text-t3">Intensity</span> is the profile value there (should be near a
-          local maximum). <span className="text-t3">Fit λ</span> is what the linear calibration maps
-          that pixel back to — close to the known wavelength ⇒ a good fit.
-        </p>
-      </div>
+      <DetectedPeaksTable calibration={calibration} profile={profile} />
 
       <div className="grid grid-cols-2 gap-5 rounded-lg border border-line bg-panel p-5 sm:grid-cols-4">
         <Readout label="Slope" value={calibration.slope.toFixed(3)} unit="nm/px" />

@@ -10,7 +10,8 @@ import { wavelengthToRgb } from "@/lib/wavelength-color";
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
 import { AbsorbanceChart, type AbsorbanceSeries } from "@/components/charts/absorbance-chart";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
-import { AlignedLampStrip } from "@/components/wizard/aligned-lamp-strip";
+import { SpectrumWithStrip } from "@/components/wizard/spectrum-with-strip";
+import { DetectedPeaksTable } from "@/components/wizard/detected-peaks-table";
 import { PrintButton } from "@/components/report/print-button";
 import { RoiPreview } from "@/components/report/roi-preview";
 import { Readout, SpectroMark, SpectrumBar, StatusChip } from "@/components/ui/primitives";
@@ -75,12 +76,6 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const unit = derived.standards[0]?.unit;
   const { calibration, curve, lambdaMax } = derived;
 
-  const calPeaks =
-    calibration?.peaks.map((p) => ({
-      x: p.pixelPosition,
-      label: `${p.knownWavelength}`,
-      color: wavelengthToRgb(p.knownWavelength),
-    })) ?? [];
   const absSeries: AbsorbanceSeries[] = derived.standards
     .filter((s) => s.spectrum)
     .map((s, i) => ({
@@ -162,9 +157,8 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
                 {roi ? `ROI ${roi.width}×${roi.height} px` : "full strip"}
               </p>
             </div>
-            <ImageStrip src={cropped(calImage.url)} label="Region analysed (cropped)" />
             {calibration && (
-              <div className="grid flex-1 grid-cols-2 content-start gap-4">
+              <div className="grid flex-1 grid-cols-2 content-start gap-4 self-start">
                 <Readout label="Slope" value={calibration.slope.toFixed(3)} unit="nm/px" />
                 <Readout label="Intercept" value={calibration.intercept.toFixed(1)} unit="nm" />
                 <Readout label="R²" value={calibration.rSquared.toFixed(4)} tone="var(--ok)" />
@@ -172,35 +166,23 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
               </div>
             )}
           </div>
-          {calProfile && (
-            <div className="rounded-lg border border-line bg-panel p-4">
-              <SpectrumChart
+          {calProfile && calibration && (
+            <>
+              <SpectrumWithStrip
                 points={calProfile}
-                peaks={calPeaks}
-                xLabel="pixel column"
-                yLabel="intensity"
-                yPrecision={0}
-                reverseX={!!calibration && calibration.slope < 0}
+                calibration={calibration}
+                croppedImageUrl={cropped(calImage.url)}
+                orientation={experiment.orientation}
+                caption={
+                  <>
+                    Lamp intensity profile; coloured lines + dots are the detected emission peaks
+                    (nm). The strip below the axis is the captured spectrum, blue (short λ) → red
+                    (long λ), left to right.
+                  </>
+                }
               />
-              {calibration && (
-                <div className="mt-1">
-                  <AlignedLampStrip
-                    imageUrl={cropped(calImage.url)}
-                    peaks={calibration.peaks}
-                    minX={calProfile[0]?.x ?? 0}
-                    maxX={calProfile[calProfile.length - 1]?.x ?? 1}
-                    slope={calibration.slope}
-                    intercept={calibration.intercept}
-                    orientation={experiment.orientation}
-                    bare
-                  />
-                </div>
-              )}
-              <p className="mt-2 text-center text-xs text-t4">
-                Lamp intensity profile; dashed lines are the detected emission peaks (nm). The strip
-                below the axis is the captured spectrum, blue → red, left to right.
-              </p>
-            </div>
+              <DetectedPeaksTable calibration={calibration} profile={calProfile} />
+            </>
           )}
         </Section>
       )}
@@ -208,12 +190,28 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
       {/* Blank */}
       {blankImage && derived.blankProfile && (
         <Section title="2 · Blank (I₀)">
-          <div className="flex flex-wrap items-start gap-5">
-            <ImageStrip src={cropped(blankImage.url)} label="Blank (cropped)" />
-            <div className="min-w-[260px] flex-1 rounded-lg border border-line bg-panel p-4">
-              <SpectrumChart points={derived.blankProfile} xLabel="pixel column" yLabel="intensity" yPrecision={0} height={200} />
+          {calibration ? (
+            <SpectrumWithStrip
+              points={derived.blankProfile}
+              calibration={calibration}
+              croppedImageUrl={cropped(blankImage.url)}
+              orientation={experiment.orientation}
+              caption={
+                <>
+                  The incident-light profile (I₀); absorbance compares each sample against this.
+                  Coloured lines mark the calibration wavelengths (nm); the strip below the axis is
+                  the captured spectrum, blue → red, left to right.
+                </>
+              }
+            />
+          ) : (
+            <div className="flex flex-wrap items-start gap-5">
+              <ImageStrip src={cropped(blankImage.url)} label="Blank (cropped)" />
+              <div className="min-w-[260px] flex-1 rounded-lg border border-line bg-panel p-4">
+                <SpectrumChart points={derived.blankProfile} xLabel="pixel column" yLabel="intensity" yPrecision={0} height={200} />
+              </div>
             </div>
-          </div>
+          )}
         </Section>
       )}
 
@@ -258,7 +256,11 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
                 <div className="min-w-[240px] flex-1">
                   <SpectrumChart
                     points={u.spectrum.points}
-                    peaks={lambdaMax != null ? [{ x: lambdaMax, label: "λmax" }] : undefined}
+                    peaks={
+                      lambdaMax != null
+                        ? [{ x: lambdaMax, label: "λmax", color: wavelengthToRgb(lambdaMax) }]
+                        : undefined
+                    }
                     xLabel="wavelength (nm)"
                     yLabel="absorbance"
                     height={180}
