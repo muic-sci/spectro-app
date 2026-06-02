@@ -4,6 +4,8 @@
  * guards the failure mode where a faint real line is dropped and a bright
  * impostor mislabels the assignment (the high-res lamp case).
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { calibrateFromLampProfile, SpectralConstants, type DataPoint } from "../src/lib/analysis";
 
@@ -57,5 +59,30 @@ describe("collinearity-based peak selection", () => {
     const cal = calibrateFromLampProfile(syntheticProfile(500, bumps));
     expect(cal.slope).toBeLessThan(0);
     expect(cal.rSquared).toBeGreaterThan(0.999);
+  });
+
+  it("is robust to a big dark margin on the red side (no flipped rotation)", () => {
+    // Real capture whose ROI has a large black region past the red end (the
+    // spectrum fills only ~510 of 1251 px). The margin used to inflate minSep
+    // past the 587/611.5 nm spacing (merging them) and inject a dim red-side
+    // impostor, flipping the calibration direction (slope +0.30 instead of −0.35).
+    const prof = JSON.parse(
+      readFileSync(resolve(__dirname, "fixtures/lamp-dark-red-margin.json"), "utf8"),
+    ).points as DataPoint[];
+    const cal = calibrateFromLampProfile(prof);
+
+    // Correct direction: this capture runs red→violet, so the slope is negative
+    // (it must NOT come out positive, which is the flipped-rotation bug).
+    expect(cal.slope).toBeLessThan(0);
+    expect(cal.rSquared).toBeGreaterThan(0.999);
+
+    // The closely-spaced 611.5/587 nm pair must both survive (not be merged).
+    const px = (lam: number) =>
+      cal.peaks.find((p) => p.knownWavelength === lam)!.pixelPosition;
+    const redPairGap = Math.abs(px(587) - px(611.5));
+    expect(redPairGap).toBeGreaterThan(40); // ~70 px apart, not collapsed to one
+    // Monotonic pixel↔wavelength (red at the low-pixel end here).
+    expect(px(611.5)).toBeLessThan(px(587));
+    expect(px(587)).toBeLessThan(px(434.5));
   });
 });

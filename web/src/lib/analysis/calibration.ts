@@ -111,15 +111,34 @@ function candidatePeaks(profile: DataPoint[], opts: DetectPeaksOptions = {}): Pe
   const smoothingWindow = opts.smoothingWindow ?? SpectralConstants.calibrationSmoothingWindow;
   const raw = profile.map((p) => p.y);
   const smoothed = movingAverage(raw, smoothingWindow);
-  const range = Math.max(...smoothed) - Math.min(...smoothed);
+  const lo = Math.min(...smoothed);
+  const range = Math.max(...smoothed) - lo;
   // Low threshold (1%) on purpose: the collinearity search downstream rejects
   // impostors, so the priority here is NOT to miss a genuine but faint line (e.g.
   // the violet 434.5). A 5% cut dropped real lines and starved the search.
   const prominenceThreshold = range * 0.01;
-  const maxima = findLocalMaxima(smoothed, prominenceThreshold);
+  const allMaxima = findLocalMaxima(smoothed, prominenceThreshold);
+
+  // Restrict to the SPECTRAL BAND (the span of the bright lines) before anything
+  // else. A big dark margin — e.g. a large black region past the red end —
+  // otherwise does two harmful things: (a) it inflates the profile length, which
+  // inflates minSep below so the closely-spaced 587/611.5 nm pair gets merged
+  // into one peak; and (b) it injects faint impostor maxima out in the dark that
+  // can win a near-tied collinear fit in the WRONG direction, flipping the whole
+  // calibration (and the rendered strip) blue↔red. Real lamp lines are bright
+  // (golden 002's dimmest, 587 nm, sits at ~33% of range), so the band is the
+  // extent of maxima above 22% of range; minSep then tracks the real line
+  // spacing, and dark-margin impostors fall outside the band.
+  const brightFloor = lo + range * 0.22;
+  const bright = allMaxima.filter((i) => smoothed[i] >= brightFloor);
+  const bandLo = bright.length ? bright[0] : 0;
+  const bandHi = bright.length ? bright[bright.length - 1] : smoothed.length - 1;
+  const maxima = allMaxima.filter((i) => i >= bandLo && i <= bandHi);
 
   // Dedupe clusters closer than minSep, keeping the most prominent in each.
-  const minSep = Math.max(10, Math.round(profile.length / 15));
+  // minSep is sized to the BAND (not the margin-padded profile length) so it
+  // separates distinct emission lines while still merging a line's JPEG sub-peaks.
+  const minSep = Math.max(10, Math.round((bandHi - bandLo) / 15));
   const scored = maxima
     .map((i) => ({ i, prom: peakProminence(smoothed, i) }))
     .sort((a, b) => b.prom - a.prom);
