@@ -40,13 +40,16 @@ export function RoiBoxEditor({
   imageUrl,
   initialRoi,
   initialOrientation = "horizontal",
+  lightType = "fluorescent",
 }: {
   experimentId: string;
   /** Every stored image, so a ROI/orientation change re-extracts all of them. */
-  images: { id: string; role: string }[];
+  images: { id: string; role: string; laserWavelength?: number | null }[];
   imageUrl: string;
   initialRoi: Rect | null;
   initialOrientation?: Orientation;
+  /** "laser" → recompute calibration from the laser captures, not the composite. */
+  lightType?: string;
 }) {
   const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -258,6 +261,7 @@ export function RoiBoxEditor({
         images,
         roi,
         vertical: nextOrientation === "vertical",
+        lightType,
       });
 
       const fd = new FormData();

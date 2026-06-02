@@ -9,7 +9,8 @@ import {
   deleteExperiment,
   regenerateJoinToken,
 } from "@/lib/experiments";
-import { EXPERIMENT_MODES, REFERENCE_LIGHTS } from "@/lib/experiment-meta";
+import { EXPERIMENT_MODES, LASER_CHANNELS, REFERENCE_LIGHTS } from "@/lib/experiment-meta";
+import { SpectralConstants } from "@/lib/analysis";
 import type { ExperimentMode, ReferenceLight } from "@/generated/prisma/enums";
 
 const MODE_VALUES = new Set(EXPERIMENT_MODES.map((m) => m.value));
@@ -49,7 +50,20 @@ export async function createExperimentAction(
     ? lightRaw
     : REFERENCE_LIGHTS[0].value) as ReferenceLight;
 
-  const experiment = await createExperiment({ userId, name, mode, lightType });
+  let laserWavelengths: number[] | undefined;
+  if (lightType === "laser") {
+    const { visibleMin, visibleMax } = SpectralConstants;
+    const parsed = LASER_CHANNELS.map((c) => Number(formData.get(`laser_${c.key}`)));
+    if (!parsed.every((w) => Number.isFinite(w) && w >= visibleMin && w <= visibleMax)) {
+      return {
+        error: `Enter each laser's wavelength in nm (${visibleMin}–${visibleMax}).`,
+        values: { name },
+      };
+    }
+    laserWavelengths = parsed;
+  }
+
+  const experiment = await createExperiment({ userId, name, mode, lightType, laserWavelengths });
   redirect(`/experiments/${experiment.id}/pair`);
 }
 

@@ -9,6 +9,12 @@ export const SpectralConstants = {
     611.5, // Europium orange-red
   ] as const,
 
+  /**
+   * Default laser-reference wavelengths (nm) for the laser calibration light:
+   * red / green / blue. Common cheap laser-diode lines; the user can edit them.
+   */
+  defaultLaserWavelengths: [650.0, 532.0, 405.0] as const,
+
   /** Lower / upper bounds of the visible spectrum (nm). */
   visibleMin: 380.0,
   visibleMax: 750.0,

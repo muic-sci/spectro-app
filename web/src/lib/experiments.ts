@@ -70,6 +70,8 @@ export function createExperiment(input: {
   name: string;
   mode: ExperimentMode;
   lightType: ReferenceLight;
+  /** For lightType "laser": the user-entered wavelengths (nm), red→green→blue. */
+  laserWavelengths?: number[];
 }) {
   return prisma.experiment.create({
     data: {
@@ -77,6 +79,10 @@ export function createExperiment(input: {
       name: input.name,
       mode: input.mode,
       lightType: input.lightType,
+      laserWavelengths:
+        input.lightType === "laser" && input.laserWavelengths?.length
+          ? input.laserWavelengths
+          : undefined,
       ...freshToken(),
     },
   });

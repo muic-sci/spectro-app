@@ -5,7 +5,8 @@ import QRCode from "qrcode";
 import { buttonVariants } from "@heroui/react";
 import { requireUserId } from "@/auth-helpers";
 import { getExperiment, joinTokenExpired } from "@/lib/experiments";
-import { modeMeta, lightMeta } from "@/lib/experiment-meta";
+import { modeMeta, lightMeta, experimentPeaks } from "@/lib/experiment-meta";
+import { parseLaserWavelengths } from "@/lib/experiment-json";
 import { isPhoneOnline } from "@/lib/realtime";
 import { Icon, SpectroMark, SpectrumBar, StatusChip } from "@/components/ui/primitives";
 import { PairingLive } from "@/components/realtime/pairing-live";
@@ -109,7 +110,14 @@ export default async function PairPage({ params }: { params: Promise<{ id: strin
         </p>
         <p className="mt-1.5">
           Reference light: {lightMeta(experiment.lightType).label} — calibrating at{" "}
-          <span className="mono">{lightMeta(experiment.lightType).peaks.join(" · ")} nm</span>.
+          <span className="mono">
+            {experimentPeaks(
+              experiment.lightType,
+              parseLaserWavelengths(experiment.laserWavelengths),
+            ).join(" · ")}{" "}
+            nm
+          </span>
+          .
         </p>
       </div>
 

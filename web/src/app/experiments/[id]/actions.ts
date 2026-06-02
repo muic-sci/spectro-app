@@ -23,7 +23,7 @@ function safeJson(v: FormDataEntryValue | null): unknown {
   }
 }
 
-const CAPTURE_ROLES: SpectralImageRole[] = ["calibration", "blank", "standard", "unknown"];
+const CAPTURE_ROLES: SpectralImageRole[] = ["calibration", "blank", "standard", "unknown", "laser"];
 
 /** Result returned to the CapturePanel (useActionState). */
 export type CaptureState = {
@@ -92,6 +92,16 @@ export async function persistCaptureAction(
   const calibration: Calibration | undefined =
     role === "calibration" ? parseCalibration(safeJson(formData.get("calibration"))) ?? undefined : undefined;
 
+  // For a laser line capture: which known wavelength (nm) it is for.
+  let laserWavelength: number | undefined;
+  if (role === "laser") {
+    const w = Number(formData.get("laserWavelength"));
+    if (!Number.isFinite(w) || w <= 0) {
+      return { error: "Missing the laser's wavelength." };
+    }
+    laserWavelength = w;
+  }
+
   const cropField = formData.get("crop");
   const cropBytes =
     cropField instanceof File && cropField.size > 0
@@ -110,6 +120,7 @@ export async function persistCaptureAction(
       cropBytes,
       concentration,
       unit,
+      laserWavelength,
     });
     const saturatedPct = saturation.fraction * 100;
     publish(id, { type: "captured", data: { role, saturatedPct } });
@@ -260,6 +271,8 @@ function captureLabel(role: SpectralImageRole, concentration?: number, unit?: st
       return `Capture standard${concentration ? ` (${concentration}${unit ? ` ${unit}` : ""})` : ""}`;
     case "unknown":
       return "Capture your unknown";
+    default:
+      return "Capture";
   }
 }
 

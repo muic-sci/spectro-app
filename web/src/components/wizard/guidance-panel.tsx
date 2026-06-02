@@ -4,10 +4,18 @@
  */
 import { Icon } from "@/components/ui/primitives";
 import { stepGuidance } from "@/lib/experiment-meta";
-import type { ExperimentMode, WorkflowStep } from "@/generated/prisma/enums";
+import type { ExperimentMode, ReferenceLight, WorkflowStep } from "@/generated/prisma/enums";
 
-export function GuidancePanel({ step, mode }: { step: WorkflowStep; mode: ExperimentMode }) {
-  const g = stepGuidance(step, mode);
+export function GuidancePanel({
+  step,
+  mode,
+  light = "fluorescent",
+}: {
+  step: WorkflowStep;
+  mode: ExperimentMode;
+  light?: ReferenceLight;
+}) {
+  const g = stepGuidance(step, mode, light);
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-line bg-panel p-4">
       <div className="flex flex-col gap-1.5">

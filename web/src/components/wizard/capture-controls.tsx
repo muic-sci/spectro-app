@@ -38,9 +38,10 @@ export function CaptureControls({
   needsConcentration = false,
   roi = null,
   orientation = "horizontal",
+  laserWavelength,
 }: {
   experimentId: string;
-  role: "calibration" | "blank" | "standard" | "unknown";
+  role: "calibration" | "blank" | "standard" | "unknown" | "laser";
   cta?: string;
   phoneOnline?: boolean;
   pending?: CaptureRequest | null;
@@ -49,6 +50,8 @@ export function CaptureControls({
   roi?: Rect | null;
   /** Spectrum orientation — drives column-vs-row averaging in the browser. */
   orientation?: "horizontal" | "vertical";
+  /** For role "laser": which known wavelength (nm) this capture is for. */
+  laserWavelength?: number;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -67,6 +70,9 @@ export function CaptureControls({
     if (needsConcentration) {
       fd.append("concentration", concentration);
       fd.append("unit", unit);
+    }
+    if (role === "laser" && laserWavelength != null) {
+      fd.append("laserWavelength", String(laserWavelength));
     }
     return fd;
   }

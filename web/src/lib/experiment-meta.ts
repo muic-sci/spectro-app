@@ -132,6 +132,9 @@ export interface LightMeta {
   peaks: number[];
 }
 
+/** Default laser wavelengths (nm), red → green → blue. */
+const LASER_DEFAULTS = [650, 532, 405] as const;
+
 /** Reference light types. Each defines the known peaks used for calibration. */
 export const REFERENCE_LIGHTS: LightMeta[] = [
   {
@@ -142,7 +145,32 @@ export const REFERENCE_LIGHTS: LightMeta[] = [
       "A fluorescent lamp emits at fixed, known wavelengths. We'll find those bright lines in your photo to learn which pixel is which colour.",
     peaks: [434.5, 486.0, 544.0, 587.0, 611.5],
   },
+  {
+    value: "laser",
+    label: "Lasers (R/G/B)",
+    tagline: "Calibrate against three lasers of known wavelength",
+    description:
+      "Shine a red, green and blue laser one at a time. You enter each one's wavelength; we overlay the three shots into one image and learn which pixel is which colour from those three lines.",
+    peaks: [...LASER_DEFAULTS],
+  },
 ];
+
+/**
+ * The three laser channels for the laser reference light, with default
+ * wavelengths (nm). The user can edit each value on the setup form; the order
+ * here defines the stored {@link Experiment.laserWavelengths} order.
+ */
+export const LASER_CHANNELS: { key: "red" | "green" | "blue"; label: string; default: number }[] = [
+  { key: "red", label: "Red", default: 650 },
+  { key: "green", label: "Green", default: 532 },
+  { key: "blue", label: "Blue", default: 405 },
+];
+
+/** The known calibration wavelengths to display for an experiment (nm). */
+export function experimentPeaks(value: ReferenceLight, laserWavelengths: number[] | null): number[] {
+  if (value === "laser") return laserWavelengths?.length ? laserWavelengths : [...LASER_DEFAULTS];
+  return lightMeta(value).peaks;
+}
 
 export function modeMeta(value: ExperimentMode): ModeMeta {
   return EXPERIMENT_MODES.find((m) => m.value === value) ?? EXPERIMENT_MODES[0];
@@ -281,8 +309,29 @@ const FLUORESCENCE_GUIDANCE: Partial<Record<WorkflowStep, StepGuidance>> = {
   },
 };
 
-/** Per-step guidance for the experiment mode (falls back to the absorbance copy). */
-export function stepGuidance(step: WorkflowStep, mode: ExperimentMode): StepGuidance {
+/**
+ * Laser-reference-light guidance overrides — the calibration setup differs (three
+ * lasers captured one at a time, then overlaid). Only the affected steps are
+ * listed; everything else falls back to the mode guidance below.
+ */
+const LASER_GUIDANCE: Partial<Record<WorkflowStep, StepGuidance>> = {
+  cameraRoiSetup: {
+    why: "Every measurement must come from the exact same region of the strip. With lasers we learn the wavelength scale from three lines you shoot one at a time, then overlay into one image — so keep the phone perfectly still between shots.",
+    todo: "Capture each laser (red, green, blue) one at a time without moving the camera, then combine them and drag a box around the strip.",
+  },
+  calibration: {
+    why: "Each laser emits a single, known wavelength. Finding each line's pixel position turns pixels into wavelengths.",
+    todo: "We found your three laser lines — check each landed on its bright peak and the fit (R²) looks right.",
+  },
+};
+
+/** Per-step guidance for the experiment mode + reference light. */
+export function stepGuidance(
+  step: WorkflowStep,
+  mode: ExperimentMode,
+  light: ReferenceLight = "fluorescent",
+): StepGuidance {
+  if (light === "laser" && LASER_GUIDANCE[step]) return LASER_GUIDANCE[step]!;
   if (mode === "fluorescence") return FLUORESCENCE_GUIDANCE[step] ?? STEP_GUIDANCE[step];
   return STEP_GUIDANCE[step];
 }

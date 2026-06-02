@@ -28,6 +28,15 @@ export function parseCalibration(j: unknown): Calibration | null {
   return null;
 }
 
+/** Parse the stored laser wavelengths (nm) array, or null when unset/invalid. */
+export function parseLaserWavelengths(j: unknown): number[] | null {
+  if (Array.isArray(j)) {
+    const nums = j.filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
+    if (nums.length >= 2) return nums;
+  }
+  return null;
+}
+
 export function parseProfile(j: unknown): DataPoint[] | null {
   if (j && typeof j === "object") {
     const points = (j as Record<string, unknown>).points;

@@ -78,6 +78,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const { calibration, curve, lambdaMax } = derived;
   const t = experimentTerms(experiment.mode);
   const isFluor = experiment.mode === "fluorescence";
+  const isLaser = experiment.lightType === "laser";
 
   const absSeries: AbsorbanceSeries[] = derived.standards
     .filter((s) => s.spectrum)
@@ -162,7 +163,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
             <div className="flex flex-col gap-2">
               <RoiPreview imageUrl={calImage.url} roi={roi} />
               <p className="text-xs text-t3">
-                Lamp capture · {experiment.orientation} ·{" "}
+                {isLaser ? "Combined lasers" : "Lamp capture"} · {experiment.orientation} ·{" "}
                 {roi ? `ROI ${roi.width}×${roi.height} px` : "full strip"}
               </p>
             </div>
@@ -171,7 +172,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
                 <Readout label="Slope" value={calibration.slope.toFixed(3)} unit="nm/px" />
                 <Readout label="Intercept" value={calibration.intercept.toFixed(1)} unit="nm" />
                 <Readout label="R²" value={calibration.rSquared.toFixed(4)} tone="var(--ok)" />
-                <Readout label="Peaks" value={calibration.peaks.length} sub="lamp lines" />
+                <Readout label="Peaks" value={calibration.peaks.length} sub={isLaser ? "laser lines" : "lamp lines"} />
               </div>
             )}
           </div>
@@ -184,9 +185,10 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
                 orientation={experiment.orientation}
                 caption={
                   <>
-                    Lamp intensity profile; coloured lines + dots are the detected emission peaks
-                    (nm). The strip below the axis is the captured spectrum, blue (short λ) → red
-                    (long λ), left to right.
+                    {isLaser ? "Combined laser" : "Lamp"} intensity profile; coloured lines + dots
+                    are the detected {isLaser ? "laser lines" : "emission peaks"} (nm). The strip
+                    below the axis is the captured spectrum, blue (short λ) → red (long λ), left to
+                    right.
                   </>
                 }
               />

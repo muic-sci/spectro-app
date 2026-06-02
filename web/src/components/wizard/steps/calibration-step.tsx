@@ -28,6 +28,7 @@ export function CalibrationStep({
   phoneOnline,
   pending,
   roi,
+  lightType = "fluorescent",
 }: {
   experimentId: string;
   calibration: Calibration | null;
@@ -38,26 +39,31 @@ export function CalibrationStep({
   phoneOnline: boolean;
   pending: CaptureRequest | null;
   roi: Rect | null;
+  lightType?: string;
 }) {
+  const isLaser = lightType === "laser";
   if (!calibration || !profile) {
     return (
       <div className="flex flex-col gap-4">
         <div className="grid-tex flex flex-col items-center gap-2 rounded-lg border border-dashed border-line bg-bg p-8 text-center">
           <Icon name="wave" size={26} style={{ color: "var(--accent-color)" }} />
           <p className="max-w-sm text-sm text-t3">
-            Capture the fluorescent lamp through your spectrometer. We&apos;ll find its five bright
-            emission lines and turn pixels into wavelengths.
+            {isLaser
+              ? "Capture your three lasers and combine them in the previous step — then come back here to check the wavelength fit."
+              : "Capture the fluorescent lamp through your spectrometer. We'll find its five bright emission lines and turn pixels into wavelengths."}
           </p>
         </div>
-        <CaptureControls
-          experimentId={experimentId}
-          role="calibration"
-          cta="Capture lamp"
-          phoneOnline={phoneOnline}
-          pending={pending}
-          roi={roi}
-          orientation={orientation}
-        />
+        {!isLaser && (
+          <CaptureControls
+            experimentId={experimentId}
+            role="calibration"
+            cta="Capture lamp"
+            phoneOnline={phoneOnline}
+            pending={pending}
+            roi={roi}
+            orientation={orientation}
+          />
+        )}
       </div>
     );
   }
@@ -106,35 +112,45 @@ export function CalibrationStep({
           value={calibration.rSquared.toFixed(4)}
           tone={verdict.tone === "ok" ? "var(--ok)" : "var(--warn)"}
         />
-        <Readout label="Peaks" value={calibration.peaks.length} sub="of 5 lamp lines" />
+        <Readout
+          label="Peaks"
+          value={calibration.peaks.length}
+          sub={isLaser ? `of ${calibration.peaks.length} laser lines` : "of 5 lamp lines"}
+        />
       </div>
 
       {imageUrl && (
         <div className="flex items-center gap-3 text-xs text-t3">
-          <span>Captured lamp:</span>
+          <span>{isLaser ? "Combined lasers:" : "Captured lamp:"}</span>
           {/* eslint-disable-next-line @next/next/no-img-element -- dynamic owner-scoped blob, not a static asset */}
           <img
             src={imageUrl}
-            alt="Captured lamp spectrum"
+            alt={isLaser ? "Combined laser spectrum" : "Captured lamp spectrum"}
             className="h-10 rounded border border-line"
           />
         </div>
       )}
 
-      <details className="rounded-lg border border-line bg-panel p-4">
-        <summary className="cursor-pointer text-sm text-t2">Re-capture the lamp</summary>
-        <div className="mt-3">
-          <CaptureControls
-            experimentId={experimentId}
-            role="calibration"
-            cta="Re-capture lamp"
-            phoneOnline={phoneOnline}
-            pending={pending}
-            roi={roi}
-            orientation={orientation}
-          />
-        </div>
-      </details>
+      {isLaser ? (
+        <p className="text-xs text-t3">
+          To re-shoot or recombine your lasers, go back to the Camera &amp; ROI step.
+        </p>
+      ) : (
+        <details className="rounded-lg border border-line bg-panel p-4">
+          <summary className="cursor-pointer text-sm text-t2">Re-capture the lamp</summary>
+          <div className="mt-3">
+            <CaptureControls
+              experimentId={experimentId}
+              role="calibration"
+              cta="Re-capture lamp"
+              phoneOnline={phoneOnline}
+              pending={pending}
+              roi={roi}
+              orientation={orientation}
+            />
+          </div>
+        </details>
+      )}
     </div>
   );
 }

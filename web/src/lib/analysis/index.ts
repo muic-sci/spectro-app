@@ -21,6 +21,8 @@ export {
   detectCalibrationPeaks,
   buildCalibration,
   calibrateFromLampProfile,
+  calibrateFromLaserProfiles,
+  dominantPeak,
   pixelToWavelength,
 } from "./calibration";
 export {

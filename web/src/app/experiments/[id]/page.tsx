@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUserId } from "@/auth-helpers";
 import { prisma } from "@/lib/db";
-import { modeMeta, parseCaptureRequest, stepLabel } from "@/lib/experiment-meta";
-import { parseRoi, parseProfile } from "@/lib/experiment-json";
+import { LASER_CHANNELS, modeMeta, parseCaptureRequest, stepLabel } from "@/lib/experiment-meta";
+import { parseRoi, parseProfile, parseLaserWavelengths } from "@/lib/experiment-json";
 import { deriveAnalysis } from "@/lib/experiment-analysis";
 import { isPhoneOnline } from "@/lib/realtime";
 import { WizardLive } from "@/components/realtime/wizard-live";
@@ -60,10 +60,25 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
   const calProfile = calImage ? parseProfile(calImage.intensityProfile) : null;
   const blankImage = experiment.images.find((im) => im.role === "blank");
 
+  // Laser reference light: the configured channels + the laser captures so far.
+  const laserWavelengths =
+    parseLaserWavelengths(experiment.laserWavelengths) ?? LASER_CHANNELS.map((c) => c.default);
+  const laserChannels = laserWavelengths.map((wavelength, i) => ({
+    label: LASER_CHANNELS[i]?.label ?? `Laser ${i + 1}`,
+    wavelength,
+  }));
+  const laserImages = experiment.images
+    .filter((im) => im.role === "laser" && im.laserWavelength != null)
+    .map((im) => ({ id: im.id, url: im.url, wavelength: im.laserWavelength as number }));
+
   // Shared with the capture controls / ROI editor so the browser extracts the
   // same region/orientation the server stores.
   const roi = parseRoi(experiment.roi);
-  const imageList = experiment.images.map((im) => ({ id: im.id, role: im.role }));
+  const imageList = experiment.images.map((im) => ({
+    id: im.id,
+    role: im.role,
+    laserWavelength: im.laserWavelength,
+  }));
 
   const phoneOnline = isPhoneOnline(experiment.id);
   const pending = parseCaptureRequest(experiment.pendingCapture);
@@ -71,12 +86,15 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
   // Continue gating per step (web-ux-brief.md §8 state catalogue).
   let canContinue = true;
   let continueHint: string | undefined;
+  const isLaser = experiment.lightType === "laser";
   if (currentStep === "cameraRoiSetup" && !calImage) {
     canContinue = false;
-    continueHint = "Capture the lamp to continue";
+    continueHint = isLaser ? "Capture all three lasers, then combine" : "Capture the lamp to continue";
   } else if (currentStep === "calibration" && !derived.calibration) {
     canContinue = false;
-    continueHint = "Capture the lamp to continue";
+    continueHint = isLaser
+      ? "Combine the three lasers to continue"
+      : "Capture the lamp to continue";
   } else if (currentStep === "blank" && !blankImage) {
     canContinue = false;
     continueHint = "Capture the blank to continue";
@@ -103,6 +121,9 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             calibrationImageUrl={calImage?.url || null}
             phoneOnline={phoneOnline}
             pending={pending}
+            lightType={experiment!.lightType}
+            laserChannels={laserChannels}
+            laserImages={laserImages}
           />
         );
       case "calibration":
@@ -117,6 +138,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             phoneOnline={phoneOnline}
             pending={pending}
             roi={roi}
+            lightType={experiment!.lightType}
           />
         );
       case "blank":
@@ -205,7 +227,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             </StatusChip>
           </div>
 
-          <GuidancePanel step={currentStep} mode={experiment.mode} />
+          <GuidancePanel step={currentStep} mode={experiment.mode} light={experiment.lightType} />
 
           {renderCanvas()}
 

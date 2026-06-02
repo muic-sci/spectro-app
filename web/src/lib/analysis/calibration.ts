@@ -262,3 +262,40 @@ export function calibrateFromLampProfile(
 
   return buildCalibration(best!.pixels, best!.descending ? descending : ascending);
 }
+
+/**
+ * Pixel position of the single dominant emission line in a profile — for a laser
+ * capture, which has one bright line. Reuses the generous `candidatePeaks` set
+ * (smoothing, band restriction, raw-max snap, sub-pixel refine) and returns the
+ * most prominent. Falls back to the argmax of the smoothed profile when no
+ * candidate clears the prominence floor (e.g. a very flat profile).
+ */
+export function dominantPeak(profile: DataPoint[]): number {
+  const candidates = candidatePeaks(profile);
+  if (candidates.length) {
+    const best = candidates.reduce((a, b) => (b.prominence > a.prominence ? b : a));
+    return best.pixel;
+  }
+  const smoothed = movingAverage(
+    profile.map((p) => p.y),
+    SpectralConstants.calibrationSmoothingWindow,
+  );
+  let argmax = 0;
+  for (let i = 1; i < smoothed.length; i++) if (smoothed[i] > smoothed[argmax]) argmax = i;
+  return profile[argmax]?.x ?? 0;
+}
+
+/**
+ * Build a pixel→λ calibration from a set of laser captures, one bright line each
+ * at a *known* wavelength. Unlike the lamp path there's no ambiguity: each
+ * profile's dominant peak is paired directly with its laser's wavelength, so we
+ * just find the peak in each and fit (handles any direction — a red→blue layout
+ * fits with a negative slope, like the lamp auto-flip, but without searching).
+ */
+export function calibrateFromLaserProfiles(
+  channels: { wavelength: number; profile: DataPoint[] }[],
+): Calibration {
+  const pixels = channels.map((c) => dominantPeak(c.profile));
+  const wavelengths = channels.map((c) => c.wavelength);
+  return buildCalibration(pixels, wavelengths);
+}

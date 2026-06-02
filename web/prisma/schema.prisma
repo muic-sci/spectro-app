@@ -58,6 +58,7 @@ enum ExperimentMode {
 
 enum ReferenceLight {
   fluorescent
+  laser
 }
 
 /// Which way the spectrum strip runs in the captured frame — the dispersion
@@ -84,6 +85,10 @@ enum SpectralImageRole {
   blank
   standard
   unknown
+  // An individual laser capture (one known-wavelength line per photo). The 3
+  // laser captures are overlaid (max-blend) into the single `calibration` image
+  // used for the ROI; calibration is fit from each laser's known wavelength.
+  laser
 }
 
 /// The shared two-device unit (laptop drives, phone captures). Owns pairing,
@@ -99,6 +104,10 @@ model Experiment {
   // Up-front choices (web-refactor-plan.md §3 step 0)
   mode      ExperimentMode @default(beerLambert)
   lightType ReferenceLight @default(fluorescent)
+
+  // For lightType == laser: the user-entered known wavelengths (nm), e.g.
+  // [650, 532, 405] (red, green, blue order). Null for the fluorescent lamp.
+  laserWavelengths Json?
 
   currentStep WorkflowStep @default(experimentSetup)
 
@@ -150,6 +159,10 @@ model SpectralImage {
   capturedAt   DateTime          @default(now())
   /// IntensityProfile: { points: [{ x, y }, ...] }
   intensityProfile Json?
+
+  /// For role == laser: which known wavelength (nm) this capture is for. Null
+  /// otherwise. Used to pair each laser line to its wavelength when calibrating.
+  laserWavelength Float?
 
   // Back-relations for the role-specific records that point at this image.
   standard Standard?

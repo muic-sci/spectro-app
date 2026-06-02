@@ -60,6 +60,8 @@ async function storeCapture(opts: {
   computed: ComputedCapture;
   concentration?: number;
   unit?: string;
+  /** For role "laser": which known wavelength (nm) this capture is for. */
+  laserWavelength?: number;
 }): Promise<CaptureResult> {
   const { experimentId, role, bytes, computed } = opts;
 
@@ -73,6 +75,18 @@ async function storeCapture(opts: {
       prior.flatMap((p) => [deleteImageBytes(p.id), deleteImageBytes(croppedKey(p.id))]),
     );
     await prisma.spectralImage.deleteMany({ where: { experimentId, role } });
+  } else if (role === "laser" && typeof opts.laserWavelength === "number") {
+    // A laser re-capture replaces only the prior capture of the SAME wavelength.
+    const prior = await prisma.spectralImage.findMany({
+      where: { experimentId, role: "laser", laserWavelength: opts.laserWavelength },
+      select: { id: true },
+    });
+    await Promise.all(
+      prior.flatMap((p) => [deleteImageBytes(p.id), deleteImageBytes(croppedKey(p.id))]),
+    );
+    await prisma.spectralImage.deleteMany({
+      where: { experimentId, role: "laser", laserWavelength: opts.laserWavelength },
+    });
   }
 
   const image = await prisma.spectralImage.create({
@@ -81,6 +95,7 @@ async function storeCapture(opts: {
       role,
       url: "",
       intensityProfile: { points: computed.profile } as unknown as Prisma.InputJsonValue,
+      laserWavelength: role === "laser" ? opts.laserWavelength ?? null : null,
     },
   });
   await saveImageBytes(image.id, bytes);
@@ -128,6 +143,7 @@ export async function persistClientCapture(opts: {
   cropBytes?: Buffer;
   concentration?: number;
   unit?: string;
+  laserWavelength?: number;
 }): Promise<CaptureResult> {
   const result = await storeCapture({
     experimentId: opts.experimentId,
@@ -141,6 +157,7 @@ export async function persistClientCapture(opts: {
     },
     concentration: opts.concentration,
     unit: opts.unit,
+    laserWavelength: opts.laserWavelength,
   });
   await persistDerived(opts.experimentId);
   return result;
