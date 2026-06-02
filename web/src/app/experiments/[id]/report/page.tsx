@@ -100,7 +100,9 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
       {/* Header */}
       <header className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <SpectroMark size={30} />
+          <Link href="/" aria-label="Home" title="Home" className="shrink-0">
+            <SpectroMark size={30} />
+          </Link>
           <div className="flex-1">
             <h1 className="text-xl font-semibold text-t1">{experiment.name}</h1>
             <p className="text-sm text-t3">
