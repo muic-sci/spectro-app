@@ -199,7 +199,9 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
   return (
     <main className="mx-auto flex min-h-dvh max-w-5xl flex-col gap-6 px-6 py-10">
       <header className="flex items-center gap-3">
-        <SpectroMark size={28} />
+        <Link href="/" aria-label="Home" title="Home" className="shrink-0">
+          <SpectroMark size={28} />
+        </Link>
         <div className="flex-1">
           <h1 className="text-lg font-semibold text-t1">{experiment.name}</h1>
           <p className="text-sm text-t3">{modeMeta(experiment.mode).label}</p>
@@ -212,7 +214,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
       <div className="grid gap-6 md:grid-cols-[190px_1fr]">
         <aside className="flex flex-col gap-4">
           <div className="rounded-lg border border-line bg-panel p-3">
-            <StepRail currentStep={currentStep} mode={experiment.mode} />
+            <StepRail experimentId={experiment.id} currentStep={currentStep} mode={experiment.mode} />
           </div>
           <Link href="/experiments" className="px-2 text-xs text-t3 hover:text-t1">
             ← All experiments
