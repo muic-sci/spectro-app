@@ -22,8 +22,16 @@ const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
+const THIRTY_DAYS = 30 * 24 * 60 * 60; // seconds
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
+  // Stay signed in for 30 days. The JWT (and its cookie) carry this maxAge; the
+  // cookie is persistent, so closing the browser keeps the session. NOTE: this
+  // only works if AUTH_SECRET is STABLE — the JWT is encrypted with a key
+  // derived from it, so a changing/missing secret invalidates every token and
+  // logs everyone out on the next visit.
+  session: { strategy: "jwt", maxAge: THIRTY_DAYS },
+  jwt: { maxAge: THIRTY_DAYS },
   trustHost: true,
   pages: {
     signIn: "/login",
