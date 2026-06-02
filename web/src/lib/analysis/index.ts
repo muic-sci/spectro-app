@@ -25,13 +25,17 @@ export {
 } from "./calibration";
 export {
   computeAbsorbance,
+  computeFluorescence,
+  computeSignal,
   toWavelengthSpectrum,
+  buildSignalSpectrum,
   buildAbsorbanceSpectrum,
   findLambdaMax,
   absorbanceAt,
   buildCalibrationCurve,
   determineConcentration,
 } from "./absorbance";
+export type { SignalMode } from "./absorbance";
 
 // NOTE: decodeImage is intentionally NOT re-exported here — import it from
 // "@/lib/analysis/decode" in server-only code (route handlers / server actions).

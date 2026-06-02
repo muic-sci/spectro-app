@@ -1,6 +1,6 @@
 /**
  * L3.6 — Unknown. Capture the unknown sample; read its concentration off the
- * Beer-Lambert curve (c = (A − b) / m). Flags extrapolation beyond the
+ * calibration curve (c = (signal − b) / m). Flags extrapolation beyond the
  * standards' range.
  */
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
@@ -10,10 +10,12 @@ import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
 import { deleteUnknownAction } from "@/app/experiments/[id]/actions";
 import type { DerivedAnalysis } from "@/lib/experiment-analysis";
 import type { Rect } from "@/lib/analysis";
-import type { CaptureRequest } from "@/lib/experiment-meta";
+import { experimentTerms, type CaptureRequest } from "@/lib/experiment-meta";
+import type { ExperimentMode } from "@/generated/prisma/enums";
 
 export function UnknownStep({
   experimentId,
+  mode,
   derived,
   phoneOnline,
   pending,
@@ -21,12 +23,14 @@ export function UnknownStep({
   orientation,
 }: {
   experimentId: string;
+  mode: ExperimentMode;
   derived: DerivedAnalysis;
   phoneOnline: boolean;
   pending: CaptureRequest | null;
   roi: Rect | null;
   orientation: "horizontal" | "vertical";
 }) {
+  const t = experimentTerms(mode);
   const { curve, lambdaMax, unknowns, standards } = derived;
   const unit = standards[0]?.unit;
 
@@ -75,12 +79,12 @@ export function UnknownStep({
                 points={u.spectrum.points}
                 peaks={lambdaMax != null ? [{ x: lambdaMax, label: "λmax" }] : undefined}
                 xLabel="wavelength (nm)"
-                yLabel="absorbance"
+                yLabel={t.signalAxis}
                 height={200}
               />
             )}
             <div className="flex flex-col justify-center gap-4">
-              <Readout label="A @ λmax" value={u.absorbanceAtLambdaMax?.toFixed(3) ?? "—"} />
+              <Readout label={`${t.signalSymbol} @ λmax`} value={u.absorbanceAtLambdaMax?.toFixed(3) ?? "—"} />
               <Readout
                 label="Concentration"
                 value={u.concentration != null ? +u.concentration.toFixed(3) : "—"}
@@ -92,8 +96,8 @@ export function UnknownStep({
 
           {u.outOfRange && (
             <p className="text-xs text-warn">
-              This absorbance is outside your standards&apos; range, so the result is extrapolated
-              and less reliable.
+              This {t.signalAxis} is outside your standards&apos; range, so the result is
+              extrapolated and less reliable.
             </p>
           )}
         </div>
@@ -108,6 +112,7 @@ export function UnknownStep({
             standards={curvePoints}
             unknowns={unknownPoints}
             unit={unit}
+            yLabel={`${t.signalSymbol} @ λmax`}
           />
         </div>
       )}

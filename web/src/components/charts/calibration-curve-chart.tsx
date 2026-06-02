@@ -27,6 +27,7 @@ export function CalibrationCurveChart({
   unknowns = [],
   unit,
   height = 280,
+  yLabel = "A @ λmax",
 }: {
   slope: number;
   intercept: number;
@@ -34,6 +35,8 @@ export function CalibrationCurveChart({
   unknowns?: CurvePoint[];
   unit?: string;
   height?: number;
+  /** Y-axis label — "A @ λmax" (default) or e.g. "F @ λmax". */
+  yLabel?: string;
 }) {
   const allX = [0, ...standards.map((s) => s.concentration), ...unknowns.map((u) => u.concentration)];
   const xMax = Math.max(...allX) * 1.08 || 1;
@@ -65,7 +68,7 @@ export function CalibrationCurveChart({
             stroke="var(--line)"
             width={46}
             tickFormatter={(v: number) => v.toFixed(1)}
-            label={{ value: "A @ λmax", angle: -90, position: "insideLeft", fill: "var(--t3)", fontSize: 11 }}
+            label={{ value: yLabel, angle: -90, position: "insideLeft", fill: "var(--t3)", fontSize: 11 }}
           />
           <Tooltip
             isAnimationActive={false}

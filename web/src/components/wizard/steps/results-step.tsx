@@ -7,14 +7,19 @@ import { buttonVariants } from "@heroui/react";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
 import { Icon, Readout } from "@/components/ui/primitives";
 import type { DerivedAnalysis } from "@/lib/experiment-analysis";
+import { experimentTerms } from "@/lib/experiment-meta";
+import type { ExperimentMode } from "@/generated/prisma/enums";
 
 export function ResultsStep({
   experimentId,
+  mode,
   derived,
 }: {
   experimentId: string;
+  mode: ExperimentMode;
   derived: DerivedAnalysis;
 }) {
+  const t = experimentTerms(mode);
   const { calibration, curve, lambdaMax, standards, unknowns } = derived;
   const unit = standards[0]?.unit;
 
@@ -33,7 +38,13 @@ export function ResultsStep({
         {calibration && (
           <Readout label="Pixel→λ R²" value={calibration.rSquared.toFixed(3)} sub="calibration" />
         )}
-        {curve && <Readout label="Beer-Lambert R²" value={curve.rSquared.toFixed(3)} sub="A vs c" />}
+        {curve && (
+          <Readout
+            label={mode === "fluorescence" ? "Calibration R²" : "Beer-Lambert R²"}
+            value={curve.rSquared.toFixed(3)}
+            sub={`${t.signalSymbol} vs c`}
+          />
+        )}
         <Readout
           label="Unknowns"
           value={unknowns.length}
@@ -51,7 +62,7 @@ export function ResultsStep({
                 value={u.concentration != null ? +u.concentration.toFixed(3) : "—"}
                 unit={unit}
                 tone="var(--accent-color)"
-                sub={u.outOfRange ? "extrapolated — less reliable" : `A = ${u.absorbanceAtLambdaMax?.toFixed(3) ?? "—"}`}
+                sub={u.outOfRange ? "extrapolated — less reliable" : `${t.signalSymbol} = ${u.absorbanceAtLambdaMax?.toFixed(3) ?? "—"}`}
               />
             </div>
           ))}
@@ -68,6 +79,7 @@ export function ResultsStep({
             standards={curvePoints}
             unknowns={unknownPoints}
             unit={unit}
+            yLabel={`${t.signalSymbol} @ λmax`}
           />
         </div>
       )}
@@ -79,7 +91,7 @@ export function ResultsStep({
             <tr className="bg-panel-2 text-left text-xs uppercase tracking-wide text-t3">
               <th className="px-3 py-2 font-semibold">Sample</th>
               <th className="px-3 py-2 font-semibold">Concentration</th>
-              <th className="px-3 py-2 font-semibold">A @ λmax</th>
+              <th className="px-3 py-2 font-semibold">{t.signalSymbol} @ λmax</th>
             </tr>
           </thead>
           <tbody className="mono">

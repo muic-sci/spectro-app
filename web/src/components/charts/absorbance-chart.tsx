@@ -29,10 +29,13 @@ export function AbsorbanceChart({
   series,
   lambdaMax,
   height = 280,
+  yLabel = "absorbance",
 }: {
   series: AbsorbanceSeries[];
   lambdaMax?: number | null;
   height?: number;
+  /** Y-axis label — "absorbance" (default) or e.g. "emission intensity". */
+  yLabel?: string;
 }) {
   // Merge by index onto a shared wavelength x (series[0] sets the axis).
   const base = series[0]?.points ?? [];
@@ -64,7 +67,7 @@ export function AbsorbanceChart({
             stroke="var(--line)"
             width={46}
             tickFormatter={(v: number) => v.toFixed(1)}
-            label={{ value: "absorbance", angle: -90, position: "insideLeft", fill: "var(--t3)", fontSize: 11 }}
+            label={{ value: yLabel, angle: -90, position: "insideLeft", fill: "var(--t3)", fontSize: 11 }}
           />
           <Tooltip
             isAnimationActive={false}

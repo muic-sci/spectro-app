@@ -37,6 +37,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!experiment) return new NextResponse("Not found", { status: 404 });
 
   const d = deriveAnalysis({
+    mode: experiment.mode,
     calibration: experiment.calibration,
     lambdaMaxOverride: experiment.lambdaMax,
     images: experiment.images,
@@ -55,13 +56,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     lines.push(row("calibration_intercept_nm", +d.calibration.intercept.toFixed(4)));
     lines.push(row("calibration_r2", +d.calibration.rSquared.toFixed(6)));
   }
+  const isFluor = experiment.mode === "fluorescence";
+  const curvePrefix = isFluor ? "fluorescence_calibration" : "beer_lambert";
+  const signalCol = isFluor ? "fluorescence_at_lambda_max" : "absorbance_at_lambda_max";
   if (d.curve) {
-    lines.push(row("beer_lambert_slope", +d.curve.slope.toFixed(6)));
-    lines.push(row("beer_lambert_intercept", +d.curve.intercept.toFixed(6)));
-    lines.push(row("beer_lambert_r2", +d.curve.rSquared.toFixed(6)));
+    lines.push(row(`${curvePrefix}_slope`, +d.curve.slope.toFixed(6)));
+    lines.push(row(`${curvePrefix}_intercept`, +d.curve.intercept.toFixed(6)));
+    lines.push(row(`${curvePrefix}_r2`, +d.curve.rSquared.toFixed(6)));
   }
   lines.push("");
-  lines.push(row("sample", "type", `concentration_${unit || "unit"}`, "absorbance_at_lambda_max", "note"));
+  lines.push(row("sample", "type", `concentration_${unit || "unit"}`, signalCol, "note"));
   d.standards.forEach((s, i) =>
     lines.push(row(`standard_${i + 1}`, "standard", s.concentration, s.absorbanceAtLambdaMax?.toFixed(6) ?? "", "")),
   );

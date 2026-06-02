@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { buttonVariants } from "@heroui/react";
 import { requireUserId } from "@/auth-helpers";
 import { prisma } from "@/lib/db";
-import { modeMeta, lightMeta } from "@/lib/experiment-meta";
+import { modeMeta, lightMeta, experimentTerms } from "@/lib/experiment-meta";
 import { parseRoi, parseProfile } from "@/lib/experiment-json";
 import { deriveAnalysis } from "@/lib/experiment-analysis";
 import { wavelengthToRgb } from "@/lib/wavelength-color";
@@ -58,6 +58,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   if (!experiment) notFound();
 
   const derived = deriveAnalysis({
+    mode: experiment.mode,
     calibration: experiment.calibration,
     lambdaMaxOverride: experiment.lambdaMax,
     images: experiment.images,
@@ -75,6 +76,8 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const cropped = (url: string) => `${url}/cropped?v=${version}`;
   const unit = derived.standards[0]?.unit;
   const { calibration, curve, lambdaMax } = derived;
+  const t = experimentTerms(experiment.mode);
+  const isFluor = experiment.mode === "fluorescence";
 
   const absSeries: AbsorbanceSeries[] = derived.standards
     .filter((s) => s.spectrum)
@@ -126,7 +129,13 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
         <div className="grid grid-cols-2 gap-5 rounded-lg border border-line bg-panel p-5 sm:grid-cols-4">
           <Readout label="λmax" value={lambdaMax != null ? Math.round(lambdaMax) : "—"} unit="nm" tone="var(--accent-color)" />
           {calibration && <Readout label="Pixel→λ R²" value={calibration.rSquared.toFixed(3)} sub="calibration" />}
-          {curve && <Readout label="Beer-Lambert R²" value={curve.rSquared.toFixed(3)} sub="A vs c" />}
+          {curve && (
+            <Readout
+              label={isFluor ? "Calibration R²" : "Beer-Lambert R²"}
+              value={curve.rSquared.toFixed(3)}
+              sub={`${t.signalSymbol} vs c`}
+            />
+          )}
           <Readout label="Standards" value={derived.standards.length} sub={`${derived.unknowns.length} unknown${derived.unknowns.length === 1 ? "" : "s"}`} />
         </div>
         {derived.unknowns.length > 0 && (
@@ -138,7 +147,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
                   value={u.concentration != null ? +u.concentration.toFixed(3) : "—"}
                   unit={unit}
                   tone="var(--accent-color)"
-                  sub={u.outOfRange ? "extrapolated — less reliable" : `A = ${u.absorbanceAtLambdaMax?.toFixed(3) ?? "—"}`}
+                  sub={u.outOfRange ? "extrapolated — less reliable" : `${t.signalSymbol} = ${u.absorbanceAtLambdaMax?.toFixed(3) ?? "—"}`}
                 />
               </div>
             ))}
@@ -187,9 +196,9 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
         </Section>
       )}
 
-      {/* Blank */}
+      {/* Blank / background */}
       {blankImage && derived.blankProfile && (
-        <Section title="2 · Blank (I₀)">
+        <Section title={`2 · ${t.blankLabel}`}>
           {calibration ? (
             <SpectrumWithStrip
               points={derived.blankProfile}
@@ -198,7 +207,9 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
               orientation={experiment.orientation}
               caption={
                 <>
-                  The incident-light profile (I₀); absorbance compares each sample against this.
+                  {isFluor
+                    ? "The background profile, subtracted from each standard so they show only the dye's emission."
+                    : "The incident-light profile (I₀); absorbance compares each sample against this."}{" "}
                   Coloured lines mark the calibration wavelengths (nm); the strip below the axis is
                   the captured spectrum, blue → red, left to right.
                 </>
@@ -206,7 +217,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
             />
           ) : (
             <div className="flex flex-wrap items-start gap-5">
-              <ImageStrip src={cropped(blankImage.url)} label="Blank (cropped)" />
+              <ImageStrip src={cropped(blankImage.url)} label={`${t.blankShort} (cropped)`} />
               <div className="min-w-[260px] flex-1 rounded-lg border border-line bg-panel p-4">
                 <SpectrumChart points={derived.blankProfile} xLabel="pixel column" yLabel="intensity" yPrecision={0} height={200} />
               </div>
@@ -221,26 +232,28 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
           <div className="flex flex-wrap gap-4">
             {derived.standards.map((s) => (
               <div key={s.id} className="flex flex-col gap-1">
-                {s.imageUrl && <ImageStrip src={cropped(s.imageUrl)} label={`${s.concentration} ${s.unit} · A=${s.absorbanceAtLambdaMax?.toFixed(3) ?? "—"}`} />}
+                {s.imageUrl && <ImageStrip src={cropped(s.imageUrl)} label={`${s.concentration} ${s.unit} · ${t.signalSymbol}=${s.absorbanceAtLambdaMax?.toFixed(3) ?? "—"}`} />}
               </div>
             ))}
           </div>
           {absSeries.length > 0 && lambdaMax != null && (
             <div className="rounded-lg border border-line bg-panel p-4">
-              <h3 className="mb-2 text-sm font-semibold text-t2">Absorbance spectra</h3>
-              <AbsorbanceChart series={absSeries} lambdaMax={lambdaMax} />
+              <h3 className="mb-2 text-sm font-semibold text-t2">{t.signal} spectra</h3>
+              <AbsorbanceChart series={absSeries} lambdaMax={lambdaMax} yLabel={t.signalAxis} />
             </div>
           )}
           {curve && (
             <div className="rounded-lg border border-line bg-panel p-4">
               <div className="mb-2 flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-t2">Beer-Lambert curve</h3>
+                <h3 className="text-sm font-semibold text-t2">
+                  {isFluor ? "Calibration curve" : "Beer-Lambert curve"}
+                </h3>
                 <StatusChip tone="accent" mono>
-                  A = {curve.slope.toFixed(4)}·c {curve.intercept >= 0 ? "+" : "−"} {Math.abs(curve.intercept).toFixed(4)}
+                  {t.signalSymbol} = {curve.slope.toFixed(4)}·c {curve.intercept >= 0 ? "+" : "−"} {Math.abs(curve.intercept).toFixed(4)}
                 </StatusChip>
                 <StatusChip tone="accent" mono>R² {curve.rSquared.toFixed(4)}</StatusChip>
               </div>
-              <CalibrationCurveChart slope={curve.slope} intercept={curve.intercept} standards={curvePoints} unknowns={unknownPoints} unit={unit} />
+              <CalibrationCurveChart slope={curve.slope} intercept={curve.intercept} standards={curvePoints} unknowns={unknownPoints} unit={unit} yLabel={`${t.signalSymbol} @ λmax`} />
             </div>
           )}
         </Section>
@@ -262,13 +275,13 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
                         : undefined
                     }
                     xLabel="wavelength (nm)"
-                    yLabel="absorbance"
+                    yLabel={t.signalAxis}
                     height={180}
                   />
                 </div>
               )}
               <div className="flex flex-col justify-center gap-3">
-                <Readout label="A @ λmax" value={u.absorbanceAtLambdaMax?.toFixed(3) ?? "—"} />
+                <Readout label={`${t.signalSymbol} @ λmax`} value={u.absorbanceAtLambdaMax?.toFixed(3) ?? "—"} />
                 <Readout label="Concentration" value={u.concentration != null ? +u.concentration.toFixed(3) : "—"} unit={unit} tone="var(--accent-color)" />
               </div>
             </div>
@@ -284,7 +297,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
               <tr className="bg-panel-2 text-left text-xs uppercase tracking-wide text-t3">
                 <th className="px-3 py-2 font-semibold">Sample</th>
                 <th className="px-3 py-2 font-semibold">Concentration</th>
-                <th className="px-3 py-2 font-semibold">A @ λmax</th>
+                <th className="px-3 py-2 font-semibold">{t.signalSymbol} @ λmax</th>
               </tr>
             </thead>
             <tbody className="mono">

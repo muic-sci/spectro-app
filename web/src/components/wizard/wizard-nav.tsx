@@ -4,22 +4,20 @@
  */
 import { buttonVariants } from "@heroui/react";
 import { Icon } from "@/components/ui/primitives";
-import { nextWizardStep, prevWizardStep, WORKFLOW_STEPS } from "@/lib/experiment-meta";
-import type { WorkflowStep } from "@/generated/prisma/enums";
+import { nextWizardStep, prevWizardStep, stepShort } from "@/lib/experiment-meta";
+import type { ExperimentMode, WorkflowStep } from "@/generated/prisma/enums";
 import { goToStepAction } from "@/app/experiments/[id]/actions";
-
-function label(step: WorkflowStep): string {
-  return WORKFLOW_STEPS.find((s) => s.value === step)?.short ?? "next";
-}
 
 export function WizardNav({
   experimentId,
   step,
+  mode,
   canContinue,
   continueHint,
 }: {
   experimentId: string;
   step: WorkflowStep;
+  mode: ExperimentMode;
   canContinue: boolean;
   continueHint?: string;
 }) {
@@ -46,7 +44,7 @@ export function WizardNav({
             <input type="hidden" name="experimentId" value={experimentId} />
             <input type="hidden" name="step" value={next} />
             <button type="submit" className={buttonVariants({ variant: "primary" })}>
-              Continue to {label(next)} <Icon name="arrowR" size={16} />
+              Continue to {stepShort(next, mode)} <Icon name="arrowR" size={16} />
             </button>
           </form>
         ) : (

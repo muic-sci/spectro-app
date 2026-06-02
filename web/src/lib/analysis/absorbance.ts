@@ -15,6 +15,16 @@ import { pixelToWavelength } from "./calibration";
 const LN10 = Math.LN10;
 
 /**
+ * The per-pixel "signal" the calibration curve is built from, which differs by
+ * experiment mode (CLAUDE.md → Key Domain Concepts):
+ *   - "absorbance"   → A = −log₁₀(I/I₀)               (Beer-Lambert quantitation)
+ *   - "fluorescence" → F = I − I₀ (background-subtracted emission intensity)
+ * Everything downstream (λmax = max signal, curve fit, back-calculation) is
+ * identical, so the rest of the pipeline is signal-agnostic.
+ */
+export type SignalMode = "absorbance" | "fluorescence";
+
+/**
  * Per-pixel absorbance A = −log₁₀(I/I₀) against the blank. x is carried through
  * as the sample's pixel column (map to wavelength separately). Guards I₀ = 0 and
  * I = 0 (and any NaN/∞) to A = 0, matching the Dart implementation.
@@ -33,6 +43,34 @@ export function computeAbsorbance(sample: DataPoint[], blank: DataPoint[]): Data
     result.push({ x: sample[i].x, y: a });
   }
   return result;
+}
+
+/**
+ * Per-pixel background-subtracted fluorescence F = I − I₀ — the sample's
+ * emission with the blank's solvent scatter / dark background removed. Negative
+ * results (noise below background) are clamped to 0 so they can't masquerade as
+ * an emission peak. Unlike absorbance this is a difference, not a ratio: at low
+ * concentration fluorescence intensity is directly proportional to concentration.
+ */
+export function computeFluorescence(sample: DataPoint[], blank: DataPoint[]): DataPoint[] {
+  const len = Math.min(sample.length, blank.length);
+  const result: DataPoint[] = [];
+  for (let i = 0; i < len; i++) {
+    const f = sample[i].y - blank[i].y;
+    result.push({ x: sample[i].x, y: f > 0 ? f : 0 });
+  }
+  return result;
+}
+
+/** Per-pixel signal for the given mode (see {@link SignalMode}). */
+export function computeSignal(
+  sample: DataPoint[],
+  blank: DataPoint[],
+  mode: SignalMode = "absorbance",
+): DataPoint[] {
+  return mode === "fluorescence"
+    ? computeFluorescence(sample, blank)
+    : computeAbsorbance(sample, blank);
 }
 
 /** Remap an absorbance profile's x from pixel column to wavelength (nm). */
@@ -66,14 +104,20 @@ export function absorbanceAt(points: DataPoint[], wavelength: number): number | 
   return best.y;
 }
 
-/** Build an AbsorbanceSpectrum (wavelength-mapped) with λmax filled in. */
-export function buildAbsorbanceSpectrum(
+/**
+ * Build a wavelength-mapped signal spectrum (absorbance or fluorescence) with
+ * λmax filled in. The shape is the same `AbsorbanceSpectrum` for both modes —
+ * `absorbanceAtLambdaMax` holds the generic signal at λmax (A or F). λmax is the
+ * wavelength of maximum signal in either mode (max absorbance / max emission).
+ */
+export function buildSignalSpectrum(
   sampleProfile: DataPoint[],
   blankProfile: DataPoint[],
   cal: Pick<Calibration, "slope" | "intercept">,
+  mode: SignalMode = "absorbance",
   lambdaMax?: number,
 ): AbsorbanceSpectrum {
-  const byPixel = computeAbsorbance(sampleProfile, blankProfile);
+  const byPixel = computeSignal(sampleProfile, blankProfile, mode);
   const points = toWavelengthSpectrum(byPixel, cal);
   const lm = lambdaMax ?? findLambdaMax(points);
   return {
@@ -81,6 +125,16 @@ export function buildAbsorbanceSpectrum(
     lambdaMax: lm,
     absorbanceAtLambdaMax: lm === undefined ? undefined : absorbanceAt(points, lm),
   };
+}
+
+/** Build an AbsorbanceSpectrum — the absorbance specialisation of {@link buildSignalSpectrum}. */
+export function buildAbsorbanceSpectrum(
+  sampleProfile: DataPoint[],
+  blankProfile: DataPoint[],
+  cal: Pick<Calibration, "slope" | "intercept">,
+  lambdaMax?: number,
+): AbsorbanceSpectrum {
+  return buildSignalSpectrum(sampleProfile, blankProfile, cal, "absorbance", lambdaMax);
 }
 
 /**

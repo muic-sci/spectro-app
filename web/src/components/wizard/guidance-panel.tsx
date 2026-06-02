@@ -3,11 +3,11 @@
  * Server-safe; copy comes from STEP_GUIDANCE.
  */
 import { Icon } from "@/components/ui/primitives";
-import { STEP_GUIDANCE } from "@/lib/experiment-meta";
-import type { WorkflowStep } from "@/generated/prisma/enums";
+import { stepGuidance } from "@/lib/experiment-meta";
+import type { ExperimentMode, WorkflowStep } from "@/generated/prisma/enums";
 
-export function GuidancePanel({ step }: { step: WorkflowStep }) {
-  const g = STEP_GUIDANCE[step];
+export function GuidancePanel({ step, mode }: { step: WorkflowStep; mode: ExperimentMode }) {
+  const g = stepGuidance(step, mode);
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-line bg-panel p-4">
       <div className="flex flex-col gap-1.5">

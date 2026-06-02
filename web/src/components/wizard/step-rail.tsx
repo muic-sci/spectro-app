@@ -4,10 +4,16 @@
  * always knows where they are. Server-safe (no hooks).
  */
 import { Icon } from "@/components/ui/primitives";
-import { WIZARD_STEPS, stepIndex } from "@/lib/experiment-meta";
-import type { WorkflowStep } from "@/generated/prisma/enums";
+import { WIZARD_STEPS, stepIndex, stepShort } from "@/lib/experiment-meta";
+import type { ExperimentMode, WorkflowStep } from "@/generated/prisma/enums";
 
-export function StepRail({ currentStep }: { currentStep: WorkflowStep }) {
+export function StepRail({
+  currentStep,
+  mode,
+}: {
+  currentStep: WorkflowStep;
+  mode: ExperimentMode;
+}) {
   const currentIdx = stepIndex(currentStep);
 
   return (
@@ -38,7 +44,7 @@ export function StepRail({ currentStep }: { currentStep: WorkflowStep }) {
             <span
               className={`text-sm ${current ? "font-semibold text-t1" : done ? "text-t2" : "text-t4"}`}
             >
-              {step.short}
+              {stepShort(step.value, mode)}
             </span>
           </li>
         );

@@ -53,6 +53,7 @@ model PasswordResetToken {
 
 enum ExperimentMode {
   beerLambert
+  fluorescence
 }
 
 enum ReferenceLight {

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUserId } from "@/auth-helpers";
 import { prisma } from "@/lib/db";
-import { modeMeta, parseCaptureRequest, WORKFLOW_STEPS } from "@/lib/experiment-meta";
+import { modeMeta, parseCaptureRequest, stepLabel } from "@/lib/experiment-meta";
 import { parseRoi, parseProfile } from "@/lib/experiment-json";
 import { deriveAnalysis } from "@/lib/experiment-analysis";
 import { isPhoneOnline } from "@/lib/realtime";
@@ -46,9 +46,9 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
   // A freshly-paired experiment lands on the first wizard step.
   const currentStep: WorkflowStep =
     experiment.currentStep === "experimentSetup" ? "cameraRoiSetup" : experiment.currentStep;
-  const currentMeta = WORKFLOW_STEPS.find((s) => s.value === currentStep);
 
   const derived = deriveAnalysis({
+    mode: experiment.mode,
     calibration: experiment.calibration,
     lambdaMaxOverride: experiment.lambdaMax,
     images: experiment.images,
@@ -123,6 +123,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
         return (
           <BlankStep
             experimentId={experiment!.id}
+            mode={experiment!.mode}
             profile={derived.blankProfile}
             imageUrl={blankImage?.url || undefined}
             calibration={derived.calibration}
@@ -137,6 +138,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
         return (
           <StandardsStep
             experimentId={experiment!.id}
+            mode={experiment!.mode}
             standards={derived.standards}
             lambdaMax={derived.lambdaMax}
             phoneOnline={phoneOnline}
@@ -146,11 +148,18 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
           />
         );
       case "absorbanceReview":
-        return <AbsorbanceReviewStep experimentId={experiment!.id} derived={derived} />;
+        return (
+          <AbsorbanceReviewStep
+            experimentId={experiment!.id}
+            mode={experiment!.mode}
+            derived={derived}
+          />
+        );
       case "unknown":
         return (
           <UnknownStep
             experimentId={experiment!.id}
+            mode={experiment!.mode}
             derived={derived}
             phoneOnline={phoneOnline}
             pending={pending}
@@ -159,9 +168,9 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
           />
         );
       case "results":
-        return <ResultsStep experimentId={experiment!.id} derived={derived} />;
+        return <ResultsStep experimentId={experiment!.id} mode={experiment!.mode} derived={derived} />;
       default:
-        return <ComingSoonStep label={currentMeta?.label ?? "This step"} />;
+        return <ComingSoonStep label={stepLabel(currentStep, experiment!.mode)} />;
     }
   }
 
@@ -181,7 +190,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
       <div className="grid gap-6 md:grid-cols-[190px_1fr]">
         <aside className="flex flex-col gap-4">
           <div className="rounded-lg border border-line bg-panel p-3">
-            <StepRail currentStep={currentStep} />
+            <StepRail currentStep={currentStep} mode={experiment.mode} />
           </div>
           <Link href="/experiments" className="px-2 text-xs text-t3 hover:text-t1">
             ← All experiments
@@ -190,19 +199,20 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
 
         <section className="flex flex-col gap-5">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-semibold text-t1">{currentMeta?.label}</h2>
+            <h2 className="text-xl font-semibold text-t1">{stepLabel(currentStep, experiment.mode)}</h2>
             <StatusChip tone="accent">
               <Icon name="arrowR" size={12} /> Current step
             </StatusChip>
           </div>
 
-          <GuidancePanel step={currentStep} />
+          <GuidancePanel step={currentStep} mode={experiment.mode} />
 
           {renderCanvas()}
 
           <WizardNav
             experimentId={experiment.id}
             step={currentStep}
+            mode={experiment.mode}
             canContinue={canContinue}
             continueHint={continueHint}
           />

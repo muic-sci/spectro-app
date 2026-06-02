@@ -49,7 +49,7 @@ export interface ModeMeta {
   description: string;
 }
 
-/** Experiment modes. Designed to grow; Beer-Lambert is the only one today. */
+/** Experiment modes. Designed to grow. */
 export const EXPERIMENT_MODES: ModeMeta[] = [
   {
     value: "beerLambert",
@@ -58,7 +58,70 @@ export const EXPERIMENT_MODES: ModeMeta[] = [
     description:
       "Measure an unknown concentration by comparing how much light your sample absorbs against a set of known standards.",
   },
+  {
+    value: "fluorescence",
+    label: "Fluorescence quantitation",
+    tagline: "Find an unknown concentration from how brightly it emits",
+    description:
+      "Measure an unknown concentration by comparing how brightly your sample fluoresces against a set of known standards. Wavelength calibration is the same; the signal is emission intensity instead of absorbance.",
+  },
 ];
+
+/**
+ * Mode-dependent terminology — the only words that differ between absorbance and
+ * fluorescence. The science pipeline is shared (calibration → λmax → linear fit
+ * → back-calculation); these labels relabel the same quantities so the wizard,
+ * charts, report and CSV read correctly in each mode. See
+ * `signalMode`/`buildSignalSpectrum` for the matching math.
+ */
+export interface ExperimentTerms {
+  /** Signal name, title case — "Absorbance" / "Emission intensity". */
+  signal: string;
+  /** Signal name, lower case (axis labels) — "absorbance" / "emission intensity". */
+  signalAxis: string;
+  /** Short symbol for tables/readouts — "A" / "F". */
+  signalSymbol: string;
+  /** "A@λmax" / "F@λmax". */
+  signalAtLambdaMax: string;
+  /** The blank step's name — "Blank (I₀)" / "Background". */
+  blankLabel: string;
+  blankShort: string;
+  /** The review step's name — "Absorbance review" / "Emission review". */
+  reviewLabel: string;
+  reviewShort: string;
+  /** One-line statement of the linear relation used to quantitate. */
+  law: string;
+}
+
+const TERMS: Record<ExperimentMode, ExperimentTerms> = {
+  beerLambert: {
+    signal: "Absorbance",
+    signalAxis: "absorbance",
+    signalSymbol: "A",
+    signalAtLambdaMax: "A@λmax",
+    blankLabel: "Blank (I₀)",
+    blankShort: "Blank",
+    reviewLabel: "Absorbance review",
+    reviewShort: "Absorbance",
+    law: "Beer's law: A = ε·l·c",
+  },
+  fluorescence: {
+    signal: "Emission intensity",
+    signalAxis: "emission intensity",
+    signalSymbol: "F",
+    signalAtLambdaMax: "F@λmax",
+    blankLabel: "Background",
+    blankShort: "Background",
+    reviewLabel: "Emission review",
+    reviewShort: "Emission",
+    law: "F = k·c",
+  },
+};
+
+/** Mode-dependent terminology bundle (see {@link ExperimentTerms}). */
+export function experimentTerms(mode: ExperimentMode): ExperimentTerms {
+  return TERMS[mode] ?? TERMS.beerLambert;
+}
 
 export interface LightMeta {
   value: ReferenceLight;
@@ -114,6 +177,22 @@ export const WORKFLOW_STEPS: StepMeta[] = [
 export const WIZARD_STEPS: StepMeta[] = WORKFLOW_STEPS.filter(
   (s) => s.value !== "experimentSetup",
 );
+
+/** A step's full label, relabelled for the experiment mode (blank/review differ). */
+export function stepLabel(step: WorkflowStep, mode: ExperimentMode): string {
+  const t = experimentTerms(mode);
+  if (step === "blank") return t.blankLabel;
+  if (step === "absorbanceReview") return t.reviewLabel;
+  return WORKFLOW_STEPS.find((s) => s.value === step)?.label ?? step;
+}
+
+/** A step's short label, relabelled for the experiment mode (blank/review differ). */
+export function stepShort(step: WorkflowStep, mode: ExperimentMode): string {
+  const t = experimentTerms(mode);
+  if (step === "blank") return t.blankShort;
+  if (step === "absorbanceReview") return t.reviewShort;
+  return WORKFLOW_STEPS.find((s) => s.value === step)?.short ?? step;
+}
 
 /** Position of `step` within the full ordered list (0-based, -1 if unknown). */
 export function stepIndex(step: WorkflowStep): number {
@@ -177,3 +256,33 @@ export const STEP_GUIDANCE: Record<WorkflowStep, StepGuidance> = {
     todo: "Download the CSV or share your results.",
   },
 };
+
+/**
+ * Fluorescence-specific guidance overrides — only the steps whose science
+ * differs from absorbance (blank → background, standards/review/unknown use
+ * emission intensity). Steps not listed fall back to {@link STEP_GUIDANCE}.
+ */
+const FLUORESCENCE_GUIDANCE: Partial<Record<WorkflowStep, StepGuidance>> = {
+  blank: {
+    why: "The background capture is solvent and cuvette with no sample — any stray light or solvent glow. We subtract it so the standards show only the dye's own emission.",
+    todo: "Put the solvent-only cuvette in the holder and capture it.",
+  },
+  standards: {
+    why: "Known concentrations let us draw the line that turns emission brightness into concentration. Two points make a line; more make it trustworthy.",
+    todo: "For each standard, enter its concentration and capture it. You need at least two.",
+  },
+  absorbanceReview: {
+    why: "λmax is the wavelength your compound emits most — measuring there gives the strongest, most reliable signal. The straight line through your standards is F = k·c.",
+    todo: "Check λmax sits on the emission peak and confirm the line fits your points.",
+  },
+  unknown: {
+    why: "Now we reverse the line: measure the unknown's emission intensity and read its concentration off the calibration curve (c = (F − b) / m).",
+    todo: "Capture your unknown sample.",
+  },
+};
+
+/** Per-step guidance for the experiment mode (falls back to the absorbance copy). */
+export function stepGuidance(step: WorkflowStep, mode: ExperimentMode): StepGuidance {
+  if (mode === "fluorescence") return FLUORESCENCE_GUIDANCE[step] ?? STEP_GUIDANCE[step];
+  return STEP_GUIDANCE[step];
+}

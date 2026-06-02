@@ -8,10 +8,12 @@ import { Icon, StatusChip } from "@/components/ui/primitives";
 import { deleteStandardAction } from "@/app/experiments/[id]/actions";
 import type { StandardAnalysis } from "@/lib/experiment-analysis";
 import type { Rect } from "@/lib/analysis";
-import type { CaptureRequest } from "@/lib/experiment-meta";
+import { experimentTerms, type CaptureRequest } from "@/lib/experiment-meta";
+import type { ExperimentMode } from "@/generated/prisma/enums";
 
 export function StandardsStep({
   experimentId,
+  mode,
   standards,
   lambdaMax,
   phoneOnline,
@@ -20,6 +22,7 @@ export function StandardsStep({
   orientation,
 }: {
   experimentId: string;
+  mode: ExperimentMode;
   standards: StandardAnalysis[];
   lambdaMax: number | null;
   phoneOnline: boolean;
@@ -27,6 +30,7 @@ export function StandardsStep({
   roi: Rect | null;
   orientation: "horizontal" | "vertical";
 }) {
+  const t = experimentTerms(mode);
   const enough = standards.length >= 2;
 
   return (
@@ -51,7 +55,7 @@ export function StandardsStep({
               <tr className="bg-panel-2 text-left text-xs uppercase tracking-wide text-t3">
                 <th className="px-3 py-2 font-semibold">Standard</th>
                 <th className="px-3 py-2 font-semibold">Concentration</th>
-                <th className="px-3 py-2 font-semibold">A @ λmax</th>
+                <th className="px-3 py-2 font-semibold">{t.signalSymbol} @ λmax</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>

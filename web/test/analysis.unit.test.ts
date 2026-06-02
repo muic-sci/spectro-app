@@ -5,6 +5,8 @@
 import { describe, expect, it } from "vitest";
 import {
   computeAbsorbance,
+  computeFluorescence,
+  computeSignal,
   linearRegression,
   movingAverage,
   findLocalMaxima,
@@ -36,6 +38,37 @@ describe("absorbance A = -log10(I/I0)", () => {
   it("A = 0 when blank is zero (guarded)", () => {
     const abs = computeAbsorbance([{ x: 500, y: 50 }], [{ x: 500, y: 0 }]);
     expect(abs[0].y).toBe(0);
+  });
+});
+
+describe("fluorescence F = I − I₀ (background-subtracted)", () => {
+  it("F is the sample minus the background", () => {
+    const f = computeFluorescence([{ x: 500, y: 120 }], [{ x: 500, y: 20 }]);
+    expect(f[0].y).toBeCloseTo(100, 10);
+  });
+
+  it("F clamps to 0 when the sample is below the background", () => {
+    const f = computeFluorescence([{ x: 500, y: 10 }], [{ x: 500, y: 30 }]);
+    expect(f[0].y).toBe(0);
+  });
+
+  it("F is linear in concentration (a difference, not a log ratio)", () => {
+    // Doubling the emission above background doubles the signal.
+    const a = computeFluorescence([{ x: 500, y: 70 }], [{ x: 500, y: 20 }])[0].y;
+    const b = computeFluorescence([{ x: 500, y: 120 }], [{ x: 500, y: 20 }])[0].y;
+    expect(b).toBeCloseTo(2 * a, 10);
+  });
+
+  it("computeSignal dispatches by mode", () => {
+    const sample = [{ x: 500, y: 10 }];
+    const blank = [{ x: 500, y: 100 }];
+    expect(computeSignal(sample, blank, "absorbance")[0].y).toBeCloseTo(1, 10);
+    expect(computeSignal([{ x: 500, y: 130 }], [{ x: 500, y: 30 }], "fluorescence")[0].y).toBeCloseTo(
+      100,
+      10,
+    );
+    // Defaults to absorbance.
+    expect(computeSignal(sample, blank)[0].y).toBeCloseTo(1, 10);
   });
 });
 

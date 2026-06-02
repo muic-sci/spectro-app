@@ -1,7 +1,7 @@
 /**
- * L3.5 — Absorbance review. No capture: pure computation. Shows the standards'
- * absorbance spectra with the λmax marker and the Beer-Lambert curve, and lets
- * the student adjust λmax (the curve rebuilds on the next render).
+ * L3.5 — Signal review (absorbance / emission). No capture: pure computation.
+ * Shows the standards' signal spectra with the λmax marker and the calibration
+ * curve, and lets the student adjust λmax (the curve rebuilds on the next render).
  */
 import { Button } from "@heroui/react";
 import { AbsorbanceChart, type AbsorbanceSeries } from "@/components/charts/absorbance-chart";
@@ -9,6 +9,8 @@ import { CalibrationCurveChart } from "@/components/charts/calibration-curve-cha
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
 import { setLambdaMaxAction } from "@/app/experiments/[id]/actions";
 import type { DerivedAnalysis } from "@/lib/experiment-analysis";
+import { experimentTerms } from "@/lib/experiment-meta";
+import type { ExperimentMode } from "@/generated/prisma/enums";
 
 // Distinct, dark-theme-legible series colours (low→high concentration).
 const SERIES_COLORS = ["#4453ff", "#1ad6d6", "#38d65a", "#d6d61a", "#ff9a1a", "#ff3b3b"];
@@ -21,11 +23,15 @@ function curveVerdict(rSquared: number): { tone: "ok" | "warn" | "danger"; text:
 
 export function AbsorbanceReviewStep({
   experimentId,
+  mode,
   derived,
 }: {
   experimentId: string;
+  mode: ExperimentMode;
   derived: DerivedAnalysis;
 }) {
+  const t = experimentTerms(mode);
+  const isFluor = mode === "fluorescence";
   const { standards, curve, lambdaMax } = derived;
   const unit = standards[0]?.unit;
 
@@ -47,8 +53,8 @@ export function AbsorbanceReviewStep({
       <div className="grid-tex flex flex-col items-center gap-2 rounded-lg border border-dashed border-line bg-bg p-8 text-center">
         <Icon name="warn" size={24} style={{ color: "var(--warn)" }} />
         <p className="max-w-sm text-sm text-t3">
-          The curve needs a blank, a calibration and at least two standards with measurable
-          absorbance. Go back and check those steps.
+          The curve needs a {t.blankShort.toLowerCase()}, a calibration and at least two standards
+          with measurable {t.signalAxis}. Go back and check those steps.
         </p>
       </div>
     );
@@ -82,20 +88,23 @@ export function AbsorbanceReviewStep({
           Auto
         </Button>
         <span className="ml-auto text-xs text-t4">
-          λmax is where your compound absorbs most — measure there for the strongest signal.
+          λmax is where your compound {isFluor ? "emits" : "absorbs"} most — measure there for the
+          strongest signal.
         </span>
       </form>
 
-      {/* Absorbance spectra */}
+      {/* Signal spectra */}
       <div className="rounded-lg border border-line bg-panel p-4">
-        <h3 className="mb-2 text-sm font-semibold text-t2">Absorbance spectra</h3>
-        <AbsorbanceChart series={series} lambdaMax={lambdaMax} />
+        <h3 className="mb-2 text-sm font-semibold text-t2">{t.signal} spectra</h3>
+        <AbsorbanceChart series={series} lambdaMax={lambdaMax} yLabel={t.signalAxis} />
       </div>
 
-      {/* Beer-Lambert curve */}
+      {/* Calibration curve */}
       <div className="rounded-lg border border-line bg-panel p-4">
         <div className="mb-2 flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-t2">Beer-Lambert curve</h3>
+          <h3 className="text-sm font-semibold text-t2">
+            {isFluor ? "Calibration curve" : "Beer-Lambert curve"}
+          </h3>
           <StatusChip tone={verdict.tone}>
             {verdict.tone === "ok" ? <Icon name="check" size={12} /> : <Icon name="warn" size={12} />}
             {verdict.text}
@@ -106,12 +115,17 @@ export function AbsorbanceReviewStep({
           intercept={curve.intercept}
           standards={curvePoints}
           unit={unit}
+          yLabel={`${t.signalSymbol} @ λmax`}
         />
       </div>
 
       <div className="grid grid-cols-2 gap-5 rounded-lg border border-line bg-panel p-5 sm:grid-cols-4">
         <Readout label="λmax" value={Math.round(lambdaMax)} unit="nm" tone="var(--accent-color)" />
-        <Readout label="Slope (ε·l)" value={curve.slope.toFixed(4)} sub={`A per ${unit ?? "unit"}`} />
+        <Readout
+          label={isFluor ? "Slope (k)" : "Slope (ε·l)"}
+          value={curve.slope.toFixed(4)}
+          sub={`${t.signalSymbol} per ${unit ?? "unit"}`}
+        />
         <Readout label="Intercept" value={curve.intercept.toFixed(4)} />
         <Readout
           label="R²"

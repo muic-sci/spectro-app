@@ -8,13 +8,25 @@
  * so it can be unit-tested directly.
  */
 import {
-  buildAbsorbanceSpectrum,
+  buildSignalSpectrum,
   buildCalibrationCurve,
   absorbanceAt,
   determineConcentration,
 } from "@/lib/analysis";
-import type { AbsorbanceSpectrum, Calibration, CalibrationCurve, DataPoint } from "@/lib/analysis";
+import type {
+  AbsorbanceSpectrum,
+  Calibration,
+  CalibrationCurve,
+  DataPoint,
+  SignalMode,
+} from "@/lib/analysis";
 import { parseCalibration, parseProfile } from "@/lib/experiment-json";
+import type { ExperimentMode } from "@/generated/prisma/enums";
+
+/** Map the stored experiment mode to the core's signal mode. */
+export function signalMode(mode: ExperimentMode | undefined): SignalMode {
+  return mode === "fluorescence" ? "fluorescence" : "absorbance";
+}
 
 interface ImageRow {
   role: string;
@@ -31,6 +43,8 @@ interface UnknownRow {
   image: { url: string; intensityProfile: unknown } | null;
 }
 export interface AnalysisInput {
+  /** Experiment mode — selects absorbance vs fluorescence signal. Defaults to Beer-Lambert. */
+  mode?: ExperimentMode;
   calibration: unknown;
   lambdaMaxOverride?: number | null;
   images: ImageRow[];
@@ -67,21 +81,24 @@ export interface DerivedAnalysis {
 }
 
 export function deriveAnalysis(input: AnalysisInput): DerivedAnalysis {
+  const mode = signalMode(input.mode);
   const calibration = parseCalibration(input.calibration);
   const blankProfile = parseProfile(
     input.images.find((im) => im.role === "blank")?.intensityProfile,
   );
 
-  const canAbsorb = Boolean(calibration && blankProfile);
+  // Both modes need calibration + a blank (the blank is I₀ for absorbance, the
+  // subtracted background for fluorescence).
+  const canCompute = Boolean(calibration && blankProfile);
 
   // Standards ascending by concentration (so the highest is last).
   const sortedStd = [...input.standards].sort((a, b) => a.concentration - b.concentration);
 
-  // First pass: each standard's full absorbance spectrum (λmax auto per spectrum).
+  // First pass: each standard's full signal spectrum (λmax auto per spectrum).
   const specByStandard = sortedStd.map((s) => {
     const profile = parseProfile(s.image?.intensityProfile);
-    if (!canAbsorb || !profile) return null;
-    return buildAbsorbanceSpectrum(profile, blankProfile!, calibration!);
+    if (!canCompute || !profile) return null;
+    return buildSignalSpectrum(profile, blankProfile!, calibration!, mode);
   });
 
   // Experiment λmax: an explicit override, else from the highest-concentration
@@ -131,7 +148,7 @@ export function deriveAnalysis(input: AnalysisInput): DerivedAnalysis {
   const unknowns: UnknownAnalysis[] = input.unknowns.map((u) => {
     const profile = parseProfile(u.image?.intensityProfile);
     const spectrum =
-      canAbsorb && profile ? buildAbsorbanceSpectrum(profile, blankProfile!, calibration!) : null;
+      canCompute && profile ? buildSignalSpectrum(profile, blankProfile!, calibration!, mode) : null;
     const a =
       spectrum && lambdaMax != null ? absorbanceAt(spectrum.points, lambdaMax) ?? null : null;
     const concentration = a != null && curve ? determineConcentration(a, curve) : null;

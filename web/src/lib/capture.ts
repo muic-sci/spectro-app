@@ -239,6 +239,7 @@ export async function persistDerived(experimentId: string): Promise<void> {
   if (!exp) return;
 
   const derived = deriveAnalysis({
+    mode: exp.mode,
     calibration: exp.calibration,
     lambdaMaxOverride: exp.lambdaMax,
     images: exp.images,
