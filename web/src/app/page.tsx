@@ -1,8 +1,15 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { buttonVariants } from "@heroui/react";
+import { auth } from "@/auth";
 import { SpectroMark, SpectrumBar, StatusChip } from "@/components/ui/primitives";
 
-export default function Home() {
+export default async function Home() {
+  // Already signed in? Skip the landing and go straight to the experiments list,
+  // so the home page reflects the session instead of always looking signed-out.
+  const session = await auth();
+  if (session?.user) redirect("/experiments");
+
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col justify-center gap-10 px-6 py-16">
       <header className="flex items-center gap-3">
