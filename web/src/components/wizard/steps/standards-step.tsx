@@ -4,6 +4,7 @@
  * Beer-Lambert curve itself is reviewed in the next step.
  */
 import { CaptureControls } from "@/components/wizard/capture-controls";
+import { DeleteButton } from "@/components/wizard/delete-button";
 import { Icon, StatusChip } from "@/components/ui/primitives";
 import { deleteStandardAction } from "@/app/experiments/[id]/actions";
 import type { StandardAnalysis } from "@/lib/experiment-analysis";
@@ -78,17 +79,13 @@ export function StandardsStep({
                     {s.absorbanceAtLambdaMax != null ? s.absorbanceAtLambdaMax.toFixed(3) : "—"}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <form action={deleteStandardAction}>
-                      <input type="hidden" name="experimentId" value={experimentId} />
-                      <input type="hidden" name="standardId" value={s.id} />
-                      <button
-                        type="submit"
-                        className="text-xs text-t4 hover:text-danger"
-                        aria-label={`Delete standard ${i + 1}`}
-                      >
-                        Delete
-                      </button>
-                    </form>
+                    <DeleteButton
+                      action={deleteStandardAction}
+                      experimentId={experimentId}
+                      idName="standardId"
+                      idValue={s.id}
+                      ariaLabel={`Delete standard ${i + 1}`}
+                    />
                   </td>
                 </tr>
               ))}

@@ -6,6 +6,7 @@
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
 import { CaptureControls } from "@/components/wizard/capture-controls";
+import { DeleteButton } from "@/components/wizard/delete-button";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
 import { deleteUnknownAction } from "@/app/experiments/[id]/actions";
 import type { DerivedAnalysis } from "@/lib/experiment-analysis";
@@ -64,13 +65,15 @@ export function UnknownStep({
                 <Icon name="warn" size={12} /> Outside standards&apos; range
               </StatusChip>
             )}
-            <form action={deleteUnknownAction} className="ml-auto">
-              <input type="hidden" name="experimentId" value={experimentId} />
-              <input type="hidden" name="unknownId" value={u.id} />
-              <button type="submit" className="text-xs text-t4 hover:text-danger">
-                Delete
-              </button>
-            </form>
+            <div className="ml-auto">
+              <DeleteButton
+                action={deleteUnknownAction}
+                experimentId={experimentId}
+                idName="unknownId"
+                idValue={u.id}
+                ariaLabel={`Delete unknown #${i + 1}`}
+              />
+            </div>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-[1fr_200px]">
