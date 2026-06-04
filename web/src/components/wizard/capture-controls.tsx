@@ -20,6 +20,7 @@ import {
   type CaptureState,
 } from "@/app/experiments/[id]/actions";
 import { analyzeCaptureBlob } from "@/lib/analysis-client";
+import { packProfile } from "@/lib/profile-codec";
 import type { CaptureRequest } from "@/lib/experiment-meta";
 
 interface Rect {
@@ -191,7 +192,7 @@ export function CaptureControls({
                   const fd = baseForm();
                   fd.append("file", file as File);
                   fd.append("crop", computed.cropBlob, "crop.jpg");
-                  fd.append("profile", JSON.stringify(computed.profile));
+                  fd.append("profile", JSON.stringify(packProfile(computed.profile)));
                   fd.append("saturation", JSON.stringify(computed.saturation));
                   if (computed.calibration) {
                     fd.append("calibration", JSON.stringify(computed.calibration));

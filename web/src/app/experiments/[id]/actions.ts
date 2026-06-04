@@ -6,6 +6,7 @@ import { getExperiment } from "@/lib/experiments";
 import { persistClientCapture, persistClientReextract } from "@/lib/capture";
 import { deleteImageBytes } from "@/lib/storage";
 import { parseCalibration } from "@/lib/experiment-json";
+import { decodeProfile } from "@/lib/profile-codec";
 import { publish } from "@/lib/realtime";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
@@ -74,11 +75,12 @@ export async function persistCaptureAction(
     }
   }
 
-  const parsedProfile = safeJson(formData.get("profile"));
-  if (!Array.isArray(parsedProfile) || parsedProfile.length === 0) {
+  // The browser sends the profile in the compact packed form (profile-codec);
+  // decodeProfile also accepts a legacy {x,y}[] array across deploy skew.
+  const profile = decodeProfile(safeJson(formData.get("profile")));
+  if (!profile || profile.length === 0) {
     return { error: "Couldn't read the analysed profile — check the ROI and retry." };
   }
-  const profile = parsedProfile as DataPoint[];
 
   const parsedSat = safeJson(formData.get("saturation")) as SaturationResult | null;
   const saturation: SaturationResult = parsedSat ?? {
@@ -178,11 +180,14 @@ export async function persistReextractAction(formData: FormData) {
   const rawProfiles = safeJson(formData.get("profiles"));
   const profiles = Array.isArray(rawProfiles)
     ? rawProfiles
-        .filter(
-          (p): p is { imageId: string; points: DataPoint[] } =>
-            !!p && known.has(p.imageId) && Array.isArray(p.points),
-        )
-        .map((p) => ({ imageId: p.imageId, points: p.points }))
+        .map((entry) => {
+          const p = entry as { imageId?: unknown; profile?: unknown; points?: unknown };
+          if (typeof p.imageId !== "string" || !known.has(p.imageId)) return null;
+          // New packed form (p.profile); decodeProfile also accepts legacy p.points.
+          const points = decodeProfile(p.profile ?? p.points);
+          return points ? { imageId: p.imageId, points } : null;
+        })
+        .filter((p): p is { imageId: string; points: DataPoint[] } => p !== null)
     : [];
 
   const crops: { imageId: string; bytes: Buffer }[] = [];

@@ -15,6 +15,7 @@ import { Button } from "@heroui/react";
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, StatusChip } from "@/components/ui/primitives";
 import { buildLaserCalibration } from "@/lib/analysis-client";
+import { packProfile } from "@/lib/profile-codec";
 import { persistCaptureAction } from "@/app/experiments/[id]/actions";
 import { wavelengthToRgb } from "@/lib/wavelength-color";
 
@@ -77,7 +78,7 @@ export function LaserCaptureStep({
         fd.append("role", "calibration");
         fd.append("file", result.compositeBlob, "composite.jpg");
         fd.append("crop", result.cropBlob, "crop.jpg");
-        fd.append("profile", JSON.stringify(result.compositeProfile));
+        fd.append("profile", JSON.stringify(packProfile(result.compositeProfile)));
         fd.append("saturation", JSON.stringify(result.saturation));
         fd.append("calibration", JSON.stringify(result.calibration));
         const res = await persistCaptureAction({}, fd);

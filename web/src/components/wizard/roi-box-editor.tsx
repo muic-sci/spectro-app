@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
 import { Icon } from "@/components/ui/primitives";
 import { reextractAll, suggestOrientation } from "@/lib/analysis-client";
+import { packProfile } from "@/lib/profile-codec";
 import type { OrientationScore } from "@/lib/analysis";
 import { persistReextractAction } from "@/app/experiments/[id]/actions";
 
@@ -276,7 +277,10 @@ export function RoiBoxEditor({
         fd.append("width", String(roi.width));
         fd.append("height", String(roi.height));
       }
-      fd.append("profiles", JSON.stringify(profiles));
+      fd.append(
+        "profiles",
+        JSON.stringify(profiles.map((p) => ({ imageId: p.imageId, profile: packProfile(p.points) }))),
+      );
       if (calibration) fd.append("calibration", JSON.stringify(calibration));
       for (const c of crops) fd.append(`crop_${c.imageId}`, c.blob, `${c.imageId}.jpg`);
 
