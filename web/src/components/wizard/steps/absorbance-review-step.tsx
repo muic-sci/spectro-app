@@ -3,11 +3,10 @@
  * Shows the standards' signal spectra with the λmax marker and the calibration
  * curve, and lets the student adjust λmax (the curve rebuilds on the next render).
  */
-import { Button } from "@heroui/react";
 import { AbsorbanceChart, type AbsorbanceSeries } from "@/components/charts/absorbance-chart";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
-import { setLambdaMaxAction } from "@/app/experiments/[id]/actions";
+import { LambdaMaxControl } from "@/components/wizard/lambda-max-control";
 import type { DerivedAnalysis } from "@/lib/experiment-analysis";
 import { experimentTerms } from "@/lib/experiment-meta";
 import type { ExperimentMode } from "@/generated/prisma/enums";
@@ -64,34 +63,13 @@ export function AbsorbanceReviewStep({
 
   return (
     <div className="flex flex-col gap-5">
-      {/* λmax control */}
-      <form
-        action={setLambdaMaxAction}
-        className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-panel p-4"
-      >
-        <input type="hidden" name="experimentId" value={experimentId} />
-        <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-t3">λmax (nm)</span>
-          <input
-            type="number"
-            name="lambdaMax"
-            step="0.5"
-            min={0}
-            defaultValue={Math.round(lambdaMax * 10) / 10}
-            className="w-28 rounded-md border border-line bg-panel-2 px-2.5 py-2 text-sm text-t1 outline-none focus:border-accent"
-          />
-        </label>
-        <Button type="submit" variant="secondary">
-          Set λmax
-        </Button>
-        <Button type="submit" name="reset" value="1" variant="ghost">
-          Auto
-        </Button>
-        <span className="ml-auto text-xs text-t4">
-          λmax is where your compound {isFluor ? "emits" : "absorbs"} most — measure there for the
-          strongest signal.
-        </span>
-      </form>
+      {/* λmax control (imperative — keyed so it re-seeds when λmax changes) */}
+      <LambdaMaxControl
+        key={lambdaMax}
+        experimentId={experimentId}
+        lambdaMax={lambdaMax}
+        isFluor={isFluor}
+      />
 
       {/* Signal spectra */}
       <div className="rounded-lg border border-line bg-panel p-4">
