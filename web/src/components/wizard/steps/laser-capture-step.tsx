@@ -17,7 +17,7 @@ import { Icon, StatusChip } from "@/components/ui/primitives";
 import { buildLaserCalibration } from "@/lib/analysis-client";
 import { packProfile } from "@/lib/profile-codec";
 import { captureLog, startTimer } from "@/lib/capture-log";
-import { persistCaptureAction } from "@/app/experiments/[id]/actions";
+import { uploadCapture } from "@/lib/capture-upload";
 import { wavelengthToRgb } from "@/lib/wavelength-color";
 
 interface Rect {
@@ -84,8 +84,8 @@ export function LaserCaptureStep({
         fd.append("profile", JSON.stringify(packProfile(result.compositeProfile)));
         fd.append("saturation", JSON.stringify(result.saturation));
         fd.append("calibration", JSON.stringify(result.calibration));
-        timer.mark("POST → persistCaptureAction (awaiting server)");
-        const res = await persistCaptureAction({}, fd);
+        timer.mark("POST → /capture (awaiting server)");
+        const res = await uploadCapture(experimentId, fd);
         timer.mark("POST returned", { ok: res.ok, error: res.error });
         if (res.error) setError(res.error);
         else router.refresh();

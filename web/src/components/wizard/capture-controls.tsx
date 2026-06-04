@@ -14,11 +14,11 @@ import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
 import { Icon, StatusChip } from "@/components/ui/primitives";
 import {
-  persistCaptureAction,
   requestCaptureAction,
   cancelCaptureAction,
   type CaptureState,
 } from "@/app/experiments/[id]/actions";
+import { uploadCapture } from "@/lib/capture-upload";
 import { analyzeCaptureBlob } from "@/lib/analysis-client";
 import { packProfile } from "@/lib/profile-codec";
 import { captureLog, startTimer } from "@/lib/capture-log";
@@ -204,8 +204,8 @@ export function CaptureControls({
                   if (computed.calibration) {
                     fd.append("calibration", JSON.stringify(computed.calibration));
                   }
-                  timer.mark("POST → persistCaptureAction (awaiting server)");
-                  const res = await persistCaptureAction({}, fd);
+                  timer.mark("POST → /capture (awaiting server)");
+                  const res = await uploadCapture(experimentId, fd);
                   timer.mark("POST returned", { ok: res.ok, error: res.error });
                   setResult(res);
                   if (res.ok) setFile(null);

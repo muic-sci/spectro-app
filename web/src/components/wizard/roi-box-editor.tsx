@@ -21,7 +21,7 @@ import { Icon } from "@/components/ui/primitives";
 import { reextractAll, suggestOrientation } from "@/lib/analysis-client";
 import { packProfile } from "@/lib/profile-codec";
 import type { OrientationScore } from "@/lib/analysis";
-import { persistReextractAction } from "@/app/experiments/[id]/actions";
+import { uploadReextract } from "@/lib/capture-upload";
 
 interface Rect {
   left: number;
@@ -284,8 +284,8 @@ export function RoiBoxEditor({
       if (calibration) fd.append("calibration", JSON.stringify(calibration));
       for (const c of crops) fd.append(`crop_${c.imageId}`, c.blob, `${c.imageId}.jpg`);
 
-      await persistReextractAction(fd);
-      router.refresh();
+      const res = await uploadReextract(experimentId, fd);
+      if (res.ok) router.refresh();
     } catch {
       // leave the UI as-is; the student can retry
     } finally {
