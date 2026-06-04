@@ -56,14 +56,14 @@ export const EXPERIMENT_MODES: ModeMeta[] = [
     label: "Beer-Lambert quantitation",
     tagline: "Find an unknown concentration from how much light it absorbs",
     description:
-      "Measure an unknown concentration by comparing how much light your sample absorbs against a set of known standards.",
+      "Shine broadband light through your sample and compare how much it absorbs against known standards. Calibrated with a fluorescent lamp — its known emission lines set the wavelength scale.",
   },
   {
     value: "fluorescence",
     label: "Fluorescence quantitation",
     tagline: "Find an unknown concentration from how brightly it emits",
     description:
-      "Measure an unknown concentration by comparing how brightly your sample fluoresces against a set of known standards. Wavelength calibration is the same; the signal is emission intensity instead of absorbance.",
+      "Excite your sample and compare how brightly it emits against known standards. Calibrated with red/green/blue lasers — their known wavelengths set the wavelength scale.",
   },
 ];
 
@@ -178,6 +178,20 @@ export function modeMeta(value: ExperimentMode): ModeMeta {
 
 export function lightMeta(value: ReferenceLight): LightMeta {
   return REFERENCE_LIGHTS.find((l) => l.value === value) ?? REFERENCE_LIGHTS[0];
+}
+
+/**
+ * The reference (calibration) light each experiment mode uses. The two are
+ * paired one-to-one (CLAUDE.md → Key Domain Concepts): absorbance shines a
+ * broadband source through the sample and calibrates the wavelength axis against
+ * a fluorescent lamp's known emission lines; fluorescence excites the sample
+ * with lasers, whose known wavelengths double as the calibration. So the setup
+ * form exposes a single choice (the mode) and derives the light from it —
+ * `lightType` stays a stored field because the calibration code genuinely
+ * branches on it, but it is no longer an independent user choice.
+ */
+export function lightForMode(mode: ExperimentMode): ReferenceLight {
+  return mode === "fluorescence" ? "laser" : "fluorescent";
 }
 
 export interface StepMeta {

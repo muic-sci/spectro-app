@@ -9,12 +9,11 @@ import {
   deleteExperiment,
   regenerateJoinToken,
 } from "@/lib/experiments";
-import { EXPERIMENT_MODES, LASER_CHANNELS, REFERENCE_LIGHTS } from "@/lib/experiment-meta";
+import { EXPERIMENT_MODES, LASER_CHANNELS, lightForMode } from "@/lib/experiment-meta";
 import { SpectralConstants } from "@/lib/analysis";
-import type { ExperimentMode, ReferenceLight } from "@/generated/prisma/enums";
+import type { ExperimentMode } from "@/generated/prisma/enums";
 
 const MODE_VALUES = new Set(EXPERIMENT_MODES.map((m) => m.value));
-const LIGHT_VALUES = new Set(REFERENCE_LIGHTS.map((l) => l.value));
 
 /** State returned to the L1 form (useActionState) on validation failure. */
 export type NewExperimentState = {
@@ -42,13 +41,12 @@ export async function createExperimentAction(
   }
 
   const modeRaw = String(formData.get("mode") ?? "");
-  const lightRaw = String(formData.get("lightType") ?? "");
   const mode = (MODE_VALUES.has(modeRaw as ExperimentMode)
     ? modeRaw
     : EXPERIMENT_MODES[0].value) as ExperimentMode;
-  const lightType = (LIGHT_VALUES.has(lightRaw as ReferenceLight)
-    ? lightRaw
-    : REFERENCE_LIGHTS[0].value) as ReferenceLight;
+  // The reference light is paired 1:1 with the mode (see lightForMode), so it's
+  // no longer a separate form field — derive it from the chosen mode.
+  const lightType = lightForMode(mode);
 
   let laserWavelengths: number[] | undefined;
   if (lightType === "laser") {

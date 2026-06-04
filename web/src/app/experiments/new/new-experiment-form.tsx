@@ -7,9 +7,9 @@ import { Icon } from "@/components/ui/primitives";
 import {
   EXPERIMENT_MODES,
   LASER_CHANNELS,
-  REFERENCE_LIGHTS,
+  lightForMode,
+  lightMeta,
   type ModeMeta,
-  type LightMeta,
 } from "@/lib/experiment-meta";
 import { createExperimentAction, type NewExperimentState } from "../actions";
 
@@ -68,16 +68,17 @@ function OptionCard({
 export function NewExperimentForm() {
   const [state, action, pending] = useActionState(createExperimentAction, INITIAL);
   const [mode, setMode] = useState<ModeMeta["value"]>(EXPERIMENT_MODES[0].value);
-  const [light, setLight] = useState<LightMeta["value"]>(REFERENCE_LIGHTS[0].value);
   const [laser, setLaser] = useState<Record<string, string>>(() =>
     Object.fromEntries(LASER_CHANNELS.map((c) => [c.key, String(c.default)])),
   );
 
-  const selectedLight = REFERENCE_LIGHTS.find((l) => l.value === light) ?? REFERENCE_LIGHTS[0];
-  const peaksLabel =
-    light === "laser"
-      ? LASER_CHANNELS.map((c) => laser[c.key] || "?").join(" · ")
-      : selectedLight.peaks.join(" · ");
+  // The reference light is paired one-to-one with the mode (absorbance →
+  // fluorescent lamp, fluorescence → lasers), so this form is a single choice;
+  // the server derives the light from the mode (lightForMode).
+  const isLaser = lightForMode(mode) === "laser";
+  const peaksLabel = isLaser
+    ? LASER_CHANNELS.map((c) => laser[c.key] || "?").join(" · ")
+    : lightMeta("fluorescent").peaks.join(" · ");
 
   return (
     <form action={action} className="flex flex-col gap-8">
@@ -103,7 +104,9 @@ export function NewExperimentForm() {
       <section className="flex flex-col gap-3">
         <div>
           <h2 className="text-sm font-semibold text-t1">Experiment mode</h2>
-          <p className="text-xs text-t3">What kind of measurement you&apos;re making.</p>
+          <p className="text-xs text-t3">
+            This sets both the signal you measure and the light you calibrate against.
+          </p>
         </div>
         <div className="flex flex-col gap-3">
           {EXPERIMENT_MODES.map((m) => (
@@ -121,27 +124,9 @@ export function NewExperimentForm() {
         </div>
       </section>
 
-      {/* Reference light */}
+      {/* Reference light is derived from the mode; only lasers need wavelengths. */}
       <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-t1">Reference light type</h2>
-          <p className="text-xs text-t3">Sets the known peaks we calibrate against.</p>
-        </div>
-        <div className="flex flex-col gap-3">
-          {REFERENCE_LIGHTS.map((l) => (
-            <OptionCard
-              key={l.value}
-              name="lightType"
-              value={l.value}
-              label={l.label}
-              tagline={l.tagline}
-              description={l.description}
-              selected={light === l.value}
-              onSelect={(v) => setLight(v as LightMeta["value"])}
-            />
-          ))}
-        </div>
-        {light === "laser" && (
+        {isLaser && (
           <div className="flex flex-col gap-2 rounded-lg border border-line bg-panel-2 p-4">
             <p className="text-xs text-t3">
               Enter each laser&apos;s wavelength (nm). You&apos;ll shoot them one at a time in the
@@ -172,7 +157,7 @@ export function NewExperimentForm() {
 
         <p className="flex items-center gap-2 text-xs text-t3">
           <Icon name="wave" size={14} style={{ color: "var(--accent-color)" }} />
-          We&apos;ll calibrate using these {light === "laser" ? "laser lines" : "emission lines"}:{" "}
+          We&apos;ll calibrate using these {isLaser ? "laser lines" : "emission lines"}:{" "}
           <span className="mono text-t2">{peaksLabel} nm</span>
         </p>
       </section>
