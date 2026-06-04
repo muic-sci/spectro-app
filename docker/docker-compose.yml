@@ -52,6 +52,10 @@ services:
       - VIRTUAL_HOST=${VIRTUAL_HOST}
       - VIRTUAL_PORT=3000
       - LETSENCRYPT_HOST=${LETSENCRYPT_HOST}
+      # Captures are multi-MB phone photos. nginx-proxy defaults client_max_body_size
+      # to 1 MB, which 413s the upload before it reaches the app (works locally with
+      # no proxy). Match (or exceed) Next's serverActions bodySizeLimit (12mb).
+      - CLIENT_MAX_BODY_SIZE=${CLIENT_MAX_BODY_SIZE:-16m}
     volumes:
       # Bind-mount the captured-image store: host UPLOADS_DIR -> the in-container
       # SPECTRO_STORAGE_DIR (kept in sync with the env var above). Relative host

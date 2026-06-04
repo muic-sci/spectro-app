@@ -251,6 +251,13 @@ migrate deploy`** on boot, then serves on **:3000** behind nginx-proxy.
   volume) + `app` (image, `uploads:/data/uploads` volume, `VIRTUAL_PORT=3000`).
   The `docker/` folder is **rsync'd** to the server; `.env` is **server-managed**
   (keep it out of the sync) and supplies every `${VAR}` — see `docker/.env.example`.
+  - **Upload-size gotcha:** captures POST the full multi-MB photo (+ crop blob +
+    profile JSON) through a server action. `web/next.config.ts` raises the
+    server-action `bodySizeLimit` to `12mb`, but **nginx-proxy** defaults
+    `client_max_body_size` to **1 MB** and 413s the upload before it reaches the
+    app — so it works locally (no proxy) yet "sticks" in prod. The app service
+    sets `CLIENT_MAX_BODY_SIZE` (default `16m`, headroom over the 12mb action cap)
+    which nginx-proxy reads per-vhost. Keep it ≥ the Next bodySizeLimit.
 - **Server setup checklist:** DNS A-record; nginx-proxy + acme-companion on an
   external `nginx-proxy` network (`docker network create nginx-proxy`); a deploy
   dir holding the synced compose + `.env` with `POSTGRES_*` / `DATABASE_URL`
