@@ -18,11 +18,14 @@
  * from client components (it is never bundled or run on the server).
  */
 import type { RasterImage } from "./types";
+import { startTimer } from "@/lib/capture-log";
 
 /** Decode a JPEG/PNG File or Blob to a 3-channel (RGB) raster, dropping alpha. */
 export async function decodeImageBrowser(blob: Blob): Promise<RasterImage> {
+  const timer = startTimer("decode", { blobSize: blob.size, blobType: blob.type });
   const bitmap = await createImageBitmap(blob, { imageOrientation: "from-image" });
   const { width, height } = bitmap;
+  timer.mark("createImageBitmap", { width, height, mp: +((width * height) / 1e6).toFixed(2) });
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -34,8 +37,10 @@ export async function decodeImageBrowser(blob: Blob): Promise<RasterImage> {
   }
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close?.();
+  timer.mark("drawImage");
 
   const { data: rgba } = ctx.getImageData(0, 0, width, height);
+  timer.mark("getImageData", { bytes: rgba.length });
   // Pure analysis core expects tightly-packed RGB (3 channels); drop alpha.
   const rgb = new Uint8ClampedArray(width * height * 3);
   for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
@@ -43,5 +48,6 @@ export async function decodeImageBrowser(blob: Blob): Promise<RasterImage> {
     rgb[j + 1] = rgba[i + 1];
     rgb[j + 2] = rgba[i + 2];
   }
+  timer.mark("rgba→rgb");
   return { width, height, data: rgb };
 }

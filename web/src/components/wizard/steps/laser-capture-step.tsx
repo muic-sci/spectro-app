@@ -16,6 +16,7 @@ import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, StatusChip } from "@/components/ui/primitives";
 import { buildLaserCalibration } from "@/lib/analysis-client";
 import { packProfile } from "@/lib/profile-codec";
+import { captureLog, startTimer } from "@/lib/capture-log";
 import { persistCaptureAction } from "@/app/experiments/[id]/actions";
 import { wavelengthToRgb } from "@/lib/wavelength-color";
 
@@ -62,6 +63,7 @@ export function LaserCaptureStep({
     setBusy(true);
     setError(null);
     startTransition(async () => {
+      const timer = startTimer("combine lasers");
       try {
         const lasers = channels
           .map((c) => captured(c.wavelength))
@@ -73,6 +75,7 @@ export function LaserCaptureStep({
           roi,
           vertical: orientation === "vertical",
         });
+        timer.mark("built composite (client done)", { points: result.compositeProfile.length });
         const fd = new FormData();
         fd.append("experimentId", experimentId);
         fd.append("role", "calibration");
@@ -81,10 +84,13 @@ export function LaserCaptureStep({
         fd.append("profile", JSON.stringify(packProfile(result.compositeProfile)));
         fd.append("saturation", JSON.stringify(result.saturation));
         fd.append("calibration", JSON.stringify(result.calibration));
+        timer.mark("POST → persistCaptureAction (awaiting server)");
         const res = await persistCaptureAction({}, fd);
+        timer.mark("POST returned", { ok: res.ok, error: res.error });
         if (res.error) setError(res.error);
         else router.refresh();
-      } catch {
+      } catch (e) {
+        captureLog("combine lasers ERROR", { error: e instanceof Error ? e.message : String(e) });
         setError("Couldn't combine the laser captures — re-shoot one and try again.");
       } finally {
         setBusy(false);

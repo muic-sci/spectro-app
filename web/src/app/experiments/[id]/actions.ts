@@ -46,6 +46,15 @@ export async function persistCaptureAction(
   _prev: CaptureState,
   formData: FormData,
 ): Promise<CaptureState> {
+  const t0 = Date.now();
+  const fileField = formData.get("file");
+  const fileSize = fileField instanceof File ? fileField.size : -1;
+  console.log("[persistCapture] enter", {
+    role: formData.get("role"),
+    fileSize,
+    hasCrop: formData.get("crop") instanceof File,
+    profileLen: typeof formData.get("profile") === "string" ? String(formData.get("profile")).length : 0,
+  });
   const userId = await requireUserId();
   const id = String(formData.get("experimentId") ?? "");
   const roleRaw = String(formData.get("role") ?? "");
@@ -112,6 +121,7 @@ export async function persistCaptureAction(
 
   try {
     const bytes = Buffer.from(await file.arrayBuffer());
+    console.log("[persistCapture] read bytes, storing", { ms: Date.now() - t0, bytes: bytes.length });
     const res = await persistClientCapture({
       experimentId: id,
       role,
@@ -127,12 +137,14 @@ export async function persistCaptureAction(
     const saturatedPct = saturation.fraction * 100;
     publish(id, { type: "captured", data: { role, saturatedPct } });
     revalidatePath(`/experiments/${id}`);
+    console.log("[persistCapture] done", { ms: Date.now() - t0, imageId: res.imageId });
     return {
       ok: true,
       saturatedPct,
       note: res.calibration ? `Fit R² ${res.calibration.rSquared.toFixed(3)}` : undefined,
     };
   } catch (e) {
+    console.error("[persistCapture] FAILED", { ms: Date.now() - t0, error: e instanceof Error ? e.message : String(e) });
     return { error: e instanceof Error ? e.message : "Couldn't save that image." };
   }
 }

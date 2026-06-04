@@ -16,6 +16,7 @@
  * from client components.
  */
 import { decodeImageBrowser } from "./analysis/decode.client";
+import { startTimer } from "@/lib/capture-log";
 import {
   extractIntensityProfile,
   checkSaturation,
@@ -168,7 +169,9 @@ export async function analyzeCaptureBlob(
   blob: Blob,
   opts: { role: string; roi: Rect | null; vertical: boolean },
 ): Promise<ClientCapture> {
+  const timer = startTimer(`analyze[${opts.role}]`, { blobSize: blob.size });
   const raster = await decodeImageBrowser(blob);
+  timer.mark("decoded", { width: raster.width, height: raster.height });
   const roi = opts.roi ?? DEFAULT_ROI;
   // Laser captures, like the lamp, want equal sensitivity across colours.
   const useMaxChannel = opts.role === "calibration" || opts.role === "laser";
@@ -176,10 +179,14 @@ export async function analyzeCaptureBlob(
     useMaxChannel,
     vertical: opts.vertical,
   });
+  timer.mark("extracted", { points: profile.length });
   const saturation = checkSaturation(raster, roi);
+  timer.mark("saturation", { fraction: +saturation.fraction.toFixed(3) });
   const calibration =
     opts.role === "calibration" ? calibrateFromLampProfile(profile) : undefined;
+  if (calibration) timer.mark("calibrated", { rSquared: +calibration.rSquared.toFixed(4) });
   const cropBlob = await renderCropBlob(raster, opts.roi);
+  timer.mark("cropped", { cropBytes: cropBlob.size });
   return { profile, saturation, calibration, cropBlob };
 }
 
@@ -209,24 +216,30 @@ export async function buildLaserCalibration(opts: {
   roi: Rect | null;
   vertical: boolean;
 }): Promise<LaserCompositeResult> {
+  const timer = startTimer("buildLaserCalibration", { lasers: opts.lasers.length });
   const roi = opts.roi ?? DEFAULT_ROI;
   const rasters = await Promise.all(
     opts.lasers.map((l) => decodeFromUrl(imageUrlFor(opts.experimentId, l.id))),
   );
+  timer.mark("decoded all", { sizes: rasters.map((r) => `${r.width}x${r.height}`).join(",") });
   const channels = opts.lasers.map((l, i) => ({
     wavelength: l.wavelength,
     profile: extractIntensityProfile(rasters[i], roi, { useMaxChannel: true, vertical: opts.vertical }),
   }));
   const calibration = calibrateFromLaserProfiles(channels);
+  timer.mark("fit", { rSquared: +calibration.rSquared.toFixed(4) });
 
   const composite = compositeMaxBlend(rasters);
+  timer.mark("composited");
   const compositeProfile = extractIntensityProfile(composite, roi, {
     useMaxChannel: true,
     vertical: opts.vertical,
   });
   const saturation = checkSaturation(composite, roi);
+  timer.mark("extracted+saturation", { points: compositeProfile.length });
   const compositeBlob = await rasterToJpegBlob(composite);
   const cropBlob = await renderCropBlob(composite, opts.roi);
+  timer.mark("encoded", { compositeBytes: compositeBlob.size, cropBytes: cropBlob.size });
 
   return { calibration, compositeBlob, compositeProfile, saturation, cropBlob };
 }

@@ -21,6 +21,7 @@ import {
 } from "@/app/experiments/[id]/actions";
 import { analyzeCaptureBlob } from "@/lib/analysis-client";
 import { packProfile } from "@/lib/profile-codec";
+import { captureLog, startTimer } from "@/lib/capture-log";
 import type { CaptureRequest } from "@/lib/experiment-meta";
 
 interface Rect {
@@ -172,7 +173,11 @@ export function CaptureControls({
             type="file"
             accept="image/*"
             className="sr-only"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              captureLog("file selected", { role, name: f?.name, size: f?.size, type: f?.type });
+              setFile(f);
+            }}
           />
         </label>
         <div>
@@ -181,6 +186,7 @@ export function CaptureControls({
             isDisabled={busy !== null || !file || !concOk}
             onClick={() =>
               run("upload", async () => {
+                const timer = startTimer(`upload[${role}]`, { file: file?.name, size: file?.size });
                 try {
                   // Decode + extract + calibrate + crop in the browser; the
                   // server only persists what we send.
@@ -189,6 +195,7 @@ export function CaptureControls({
                     roi,
                     vertical: orientation === "vertical",
                   });
+                  timer.mark("analyzed (client compute done)", { points: computed.profile.length });
                   const fd = baseForm();
                   fd.append("file", file as File);
                   fd.append("crop", computed.cropBlob, "crop.jpg");
@@ -197,10 +204,13 @@ export function CaptureControls({
                   if (computed.calibration) {
                     fd.append("calibration", JSON.stringify(computed.calibration));
                   }
+                  timer.mark("POST → persistCaptureAction (awaiting server)");
                   const res = await persistCaptureAction({}, fd);
+                  timer.mark("POST returned", { ok: res.ok, error: res.error });
                   setResult(res);
                   if (res.ok) setFile(null);
-                } catch {
+                } catch (e) {
+                  captureLog(`upload[${role}] ERROR`, { error: e instanceof Error ? e.message : String(e) });
                   setResult({ error: "Couldn't analyse that photo in your browser — try another." });
                 }
               })
