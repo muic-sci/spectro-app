@@ -31,7 +31,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     include: {
       images: true,
       standards: { include: { image: true } },
-      unknowns: { include: { image: true } },
+      unknowns: { include: { image: true }, orderBy: { createdAt: "asc" } },
     },
   });
   if (!experiment) return new NextResponse("Not found", { status: 404 });

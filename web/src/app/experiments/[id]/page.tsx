@@ -37,7 +37,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
     include: {
       images: { orderBy: { capturedAt: "desc" } },
       standards: { include: { image: true } },
-      unknowns: { include: { image: true } },
+      unknowns: { include: { image: true }, orderBy: { createdAt: "asc" } },
     },
   });
   if (!experiment) notFound();

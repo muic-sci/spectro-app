@@ -38,6 +38,7 @@ export function CaptureControls({
   phoneOnline = false,
   pending = null,
   needsConcentration = false,
+  multiple = false,
   roi = null,
   orientation = "horizontal",
   laserWavelength,
@@ -48,6 +49,8 @@ export function CaptureControls({
   phoneOnline?: boolean;
   pending?: CaptureRequest | null;
   needsConcentration?: boolean;
+  /** Allow picking several photos at once — each is uploaded as its own capture. */
+  multiple?: boolean;
   /** Current ROI (image px) so the browser extracts the same region the server stores. */
   roi?: Rect | null;
   /** Spectrum orientation — drives column-vs-row averaging in the browser. */
@@ -59,7 +62,8 @@ export function CaptureControls({
   const [, startTransition] = useTransition();
   const [concentration, setConcentration] = useState("");
   const [unit, setUnit] = useState("mg/L");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<CaptureState | null>(null);
   const [busy, setBusy] = useState<"upload" | "request" | "cancel" | null>(null);
 
@@ -168,55 +172,91 @@ export function CaptureControls({
         {phoneOnline && <span className="text-xs text-t4">or upload from this device</span>}
         <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-line bg-panel-2 px-3 py-3 text-sm text-t2 hover:border-line-soft">
           <Icon name="cam" size={18} style={{ color: "var(--accent-color)" }} />
-          <span className="flex-1 truncate">{file?.name ?? "Choose a photo of the spectrum…"}</span>
+          <span className="flex-1 truncate">
+            {files.length === 0
+              ? multiple
+                ? "Choose one or more photos of the spectrum…"
+                : "Choose a photo of the spectrum…"
+              : files.length === 1
+                ? files[0].name
+                : `${files.length} photos selected`}
+          </span>
           <input
             type="file"
             accept="image/*"
+            multiple={multiple}
             className="sr-only"
             onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              captureLog("file selected", { role, name: f?.name, size: f?.size, type: f?.type });
-              setFile(f);
+              const fs = Array.from(e.target.files ?? []);
+              captureLog("file selected", { role, count: fs.length, multiple });
+              setFiles(fs);
             }}
           />
         </label>
         <div>
           <Button
             variant={phoneOnline ? "secondary" : "primary"}
-            isDisabled={busy !== null || !file || !concOk}
+            isDisabled={busy !== null || files.length === 0 || !concOk}
             onClick={() =>
               run("upload", async () => {
-                const timer = startTimer(`upload[${role}]`, { file: file?.name, size: file?.size });
-                try {
-                  // Decode + extract + calibrate + crop in the browser; the
-                  // server only persists what we send.
-                  const computed = await analyzeCaptureBlob(file as File, {
-                    role,
-                    roi,
-                    vertical: orientation === "vertical",
-                  });
-                  timer.mark("analyzed (client compute done)", { points: computed.profile.length });
-                  const fd = baseForm();
-                  fd.append("file", file as File);
-                  fd.append("crop", computed.cropBlob, "crop.jpg");
-                  fd.append("profile", JSON.stringify(packProfile(computed.profile)));
-                  fd.append("saturation", JSON.stringify(computed.saturation));
-                  if (computed.calibration) {
-                    fd.append("calibration", JSON.stringify(computed.calibration));
+                // Each chosen photo is decoded + extracted + cropped in the
+                // browser and uploaded as its own capture (the server only
+                // persists what we send). With one file this is the old path;
+                // with several (unknowns) they're processed in turn.
+                const queue = files;
+                let ok = 0;
+                let firstError: string | undefined;
+                let last: CaptureState | null = null;
+                for (let i = 0; i < queue.length; i++) {
+                  const f = queue[i];
+                  if (queue.length > 1) setProgress({ done: i, total: queue.length });
+                  const timer = startTimer(`upload[${role}]`, { file: f.name, size: f.size });
+                  try {
+                    const computed = await analyzeCaptureBlob(f, {
+                      role,
+                      roi,
+                      vertical: orientation === "vertical",
+                    });
+                    timer.mark("analyzed (client compute done)", { points: computed.profile.length });
+                    const fd = baseForm();
+                    fd.append("file", f);
+                    fd.append("crop", computed.cropBlob, "crop.jpg");
+                    fd.append("profile", JSON.stringify(packProfile(computed.profile)));
+                    fd.append("saturation", JSON.stringify(computed.saturation));
+                    if (computed.calibration) {
+                      fd.append("calibration", JSON.stringify(computed.calibration));
+                    }
+                    timer.mark("POST → /capture (awaiting server)");
+                    const res = await uploadCapture(experimentId, fd);
+                    timer.mark("POST returned", { ok: res.ok, error: res.error });
+                    last = res;
+                    if (res.ok) ok++;
+                    else if (!firstError) firstError = res.error;
+                  } catch (e) {
+                    captureLog(`upload[${role}] ERROR`, { error: e instanceof Error ? e.message : String(e) });
+                    if (!firstError) firstError = "Couldn't analyse that photo in your browser — try another.";
                   }
-                  timer.mark("POST → /capture (awaiting server)");
-                  const res = await uploadCapture(experimentId, fd);
-                  timer.mark("POST returned", { ok: res.ok, error: res.error });
-                  setResult(res);
-                  if (res.ok) setFile(null);
-                } catch (e) {
-                  captureLog(`upload[${role}] ERROR`, { error: e instanceof Error ? e.message : String(e) });
-                  setResult({ error: "Couldn't analyse that photo in your browser — try another." });
+                }
+                setProgress(null);
+                if (queue.length > 1) {
+                  setResult(
+                    ok > 0
+                      ? { ok: true, note: `${ok} of ${queue.length} captured${firstError ? " — some failed" : ""}` }
+                      : { error: firstError ?? "Upload failed." },
+                  );
+                  if (ok > 0) setFiles([]);
+                } else {
+                  setResult(last);
+                  if (last?.ok) setFiles([]);
                 }
               })
             }
           >
-            {busy === "upload" ? "Analysing…" : cta}
+            {busy === "upload"
+              ? progress
+                ? `Analysing ${progress.done + 1}/${progress.total}…`
+                : "Analysing…"
+              : cta}
           </Button>
         </div>
       </div>

@@ -122,12 +122,16 @@ export function UnknownStep({
 
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold text-t1">
-          {unknowns.length > 0 ? "Measure another unknown" : "Capture your unknown"}
+          {unknowns.length > 0 ? "Measure more unknowns" : "Capture your unknown"}
         </h3>
+        <p className="text-xs text-t3">
+          You can upload several photos at once — each becomes its own unknown sample.
+        </p>
         <CaptureControls
           experimentId={experimentId}
           role="unknown"
-          cta="Capture unknown"
+          cta="Capture unknowns"
+          multiple
           phoneOnline={phoneOnline}
           pending={pending}
           roi={roi}

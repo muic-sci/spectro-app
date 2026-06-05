@@ -53,7 +53,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
     include: {
       images: { orderBy: { capturedAt: "asc" } },
       standards: { include: { image: true }, orderBy: { concentration: "asc" } },
-      unknowns: { include: { image: true } },
+      unknowns: { include: { image: true }, orderBy: { createdAt: "asc" } },
     },
   });
   if (!experiment) notFound();
