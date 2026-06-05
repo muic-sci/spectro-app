@@ -14,7 +14,6 @@ import { RoiStep } from "@/components/wizard/steps/roi-step";
 import { CalibrationStep } from "@/components/wizard/steps/calibration-step";
 import { BlankStep } from "@/components/wizard/steps/blank-step";
 import { StandardsStep } from "@/components/wizard/steps/standards-step";
-import { AbsorbanceReviewStep } from "@/components/wizard/steps/absorbance-review-step";
 import { UnknownStep } from "@/components/wizard/steps/unknown-step";
 import { ResultsStep } from "@/components/wizard/steps/results-step";
 import { ComingSoonStep } from "@/components/wizard/steps/coming-soon-step";
@@ -43,9 +42,13 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
   });
   if (!experiment) notFound();
 
-  // A freshly-paired experiment lands on the first wizard step.
-  const currentStep: WorkflowStep =
-    experiment.currentStep === "experimentSetup" ? "cameraRoiSetup" : experiment.currentStep;
+  // A freshly-paired experiment lands on the first wizard step. The standalone
+  // "absorbanceReview" step has been merged into "standards" (the curve now
+  // builds live as standards are added) — redirect any experiment still parked
+  // on the retired step so its enum value stays a harmless legacy.
+  let currentStep: WorkflowStep = experiment.currentStep;
+  if (currentStep === "experimentSetup") currentStep = "cameraRoiSetup";
+  if (currentStep === "absorbanceReview") currentStep = "standards";
 
   const derived = deriveAnalysis({
     mode: experiment.mode,
@@ -59,6 +62,14 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
   const calImage = experiment.images.find((im) => im.role === "calibration");
   const calProfile = calImage ? parseProfile(calImage.intensityProfile) : null;
   const blankImage = experiment.images.find((im) => im.role === "blank");
+
+  // Pixel domain shared by every capture's ROI (same ROI/orientation), taken
+  // from the lamp profile — lets the standards step align each standard's strip
+  // with the calibration peaks (drawn by pixel position).
+  const stripDomain =
+    calProfile && calProfile.length
+      ? { minX: calProfile[0].x, maxX: calProfile[calProfile.length - 1].x }
+      : null;
 
   // Laser reference light: the configured channels + the laser captures so far.
   const laserWavelengths =
@@ -98,12 +109,12 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
   } else if (currentStep === "blank" && !blankImage) {
     canContinue = false;
     continueHint = "Capture the blank to continue";
-  } else if (currentStep === "standards" && derived.standards.length < 2) {
+  } else if (currentStep === "standards" && !derived.curve) {
     canContinue = false;
-    continueHint = "Add at least 2 standards to continue";
-  } else if (currentStep === "absorbanceReview" && !derived.curve) {
-    canContinue = false;
-    continueHint = "Build the calibration curve to continue";
+    continueHint =
+      derived.standards.length < 2
+        ? "Add at least 2 standards to continue"
+        : "Capture standards with a measurable signal to continue";
   } else if (currentStep === "unknown" && !derived.unknowns.some((u) => u.concentration != null)) {
     canContinue = false;
     continueHint = "Measure an unknown to continue";
@@ -161,20 +172,13 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
           <StandardsStep
             experimentId={experiment!.id}
             mode={experiment!.mode}
-            standards={derived.standards}
-            lambdaMax={derived.lambdaMax}
+            derived={derived}
+            version={experiment!.updatedAt.getTime()}
+            stripDomain={stripDomain}
             phoneOnline={phoneOnline}
             pending={pending}
             roi={roi}
             orientation={experiment!.orientation}
-          />
-        );
-      case "absorbanceReview":
-        return (
-          <AbsorbanceReviewStep
-            experimentId={experiment!.id}
-            mode={experiment!.mode}
-            derived={derived}
           />
         );
       case "unknown":

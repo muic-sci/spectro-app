@@ -206,8 +206,10 @@ export const WORKFLOW_STEPS: StepMeta[] = [
   { value: "cameraRoiSetup", label: "Camera & ROI setup", short: "Camera & ROI" },
   { value: "calibration", label: "Wavelength calibration", short: "Calibration" },
   { value: "blank", label: "Blank (I₀)", short: "Blank" },
-  { value: "standards", label: "Standards", short: "Standards" },
-  { value: "absorbanceReview", label: "Absorbance review", short: "Absorbance" },
+  { value: "standards", label: "Standards & curve", short: "Standards" },
+  // "absorbanceReview" is intentionally absent: it was merged into "standards"
+  // (the spectra + curve now build live there). The enum value lives on for
+  // legacy rows — the wizard page redirects it to "standards".
   { value: "unknown", label: "Unknown", short: "Unknown" },
   { value: "results", label: "Results & export", short: "Results" },
 ];
@@ -282,8 +284,8 @@ export const STEP_GUIDANCE: Record<WorkflowStep, StepGuidance> = {
     todo: "Put the solvent-only cuvette in the holder and capture it.",
   },
   standards: {
-    why: "Known concentrations let us draw the line that turns absorbance into concentration. Two points make a line; more make it trustworthy.",
-    todo: "For each standard, enter its concentration and capture it. You need at least two.",
+    why: "Known concentrations let us draw the line that turns absorbance into concentration. Two points make a line; more make it trustworthy — the spectra and Beer-Lambert curve build here as you add each one.",
+    todo: "For each standard, enter its concentration and capture it (at least two). Watch the spectra and curve appear, and check λmax sits on the peak.",
   },
   absorbanceReview: {
     why: "λmax is the wavelength your compound absorbs most — measuring there gives the strongest, most reliable signal. The straight line through your standards is Beer's law: A = ε·l·c.",
@@ -311,8 +313,8 @@ const FLUORESCENCE_GUIDANCE: Partial<Record<WorkflowStep, StepGuidance>> = {
     todo: "Put the solvent-only cuvette in the holder and capture it.",
   },
   standards: {
-    why: "Known concentrations let us draw the line that turns emission brightness into concentration. Two points make a line; more make it trustworthy.",
-    todo: "For each standard, enter its concentration and capture it. You need at least two.",
+    why: "Known concentrations let us draw the line that turns emission brightness into concentration. Two points make a line; more make it trustworthy — the spectra and curve build here as you add each one.",
+    todo: "For each standard, enter its concentration and capture it (at least two). Watch the emission spectra and curve appear, and check λmax sits on the peak.",
   },
   absorbanceReview: {
     why: "λmax is the wavelength your compound emits most — measuring there gives the strongest, most reliable signal. The straight line through your standards is F = k·c.",
