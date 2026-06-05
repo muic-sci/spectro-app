@@ -10,6 +10,7 @@ import { wavelengthToRgb } from "@/lib/wavelength-color";
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
 import { AbsorbanceChart, type AbsorbanceSeries } from "@/components/charts/absorbance-chart";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
+import { CalibrationFitChart } from "@/components/charts/calibration-fit-chart";
 import { SpectrumWithStrip } from "@/components/wizard/spectrum-with-strip";
 import { DetectedPeaksTable } from "@/components/wizard/detected-peaks-table";
 import { PrintButton } from "@/components/report/print-button";
@@ -195,6 +196,18 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
                 }
               />
               <DetectedPeaksTable calibration={calibration} profile={calProfile} />
+              <div className="rounded-lg border border-line bg-panel p-4">
+                <h3 className="mb-1 text-sm font-semibold text-t2">Wavelength vs pixel fit</h3>
+                <p className="mb-2 text-xs text-t4">
+                  Each dot is a detected {isLaser ? "laser line" : "emission line"} at its pixel
+                  position (x) vs known wavelength (y). The line is the least-squares fit{" "}
+                  <span className="mono text-t3">
+                    λ = {calibration.slope.toFixed(3)}·px + {calibration.intercept.toFixed(1)}
+                  </span>{" "}
+                  (R² = {calibration.rSquared.toFixed(4)}).
+                </p>
+                <CalibrationFitChart calibration={calibration} />
+              </div>
             </>
           )}
         </Section>

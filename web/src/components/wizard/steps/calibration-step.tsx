@@ -6,6 +6,7 @@
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { SpectrumWithStrip } from "@/components/wizard/spectrum-with-strip";
 import { DetectedPeaksTable } from "@/components/wizard/detected-peaks-table";
+import { CalibrationFitChart } from "@/components/charts/calibration-fit-chart";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
 import type { Calibration, DataPoint, Rect } from "@/lib/analysis";
 import type { CaptureRequest } from "@/lib/experiment-meta";
@@ -103,6 +104,21 @@ export function CalibrationStep({
 
       {/* Detected-peak readout — verify each dash lands on a real, bright pixel. */}
       <DetectedPeaksTable calibration={calibration} profile={profile} />
+
+      {/* The raw pixel→wavelength fit behind the slope/intercept/R² readout. */}
+      <div className="rounded-lg border border-line bg-panel p-4">
+        <h3 className="mb-1 text-sm font-semibold text-t2">Wavelength vs pixel fit</h3>
+        <p className="mb-2 text-xs text-t4">
+          Each dot is a detected {isLaser ? "laser line" : "emission line"} at its pixel position (x)
+          and known wavelength (y), tinted by colour. The line is the least-squares fit{" "}
+          <span className="mono text-t3">
+            λ = {calibration.slope.toFixed(3)}·px + {calibration.intercept.toFixed(1)}
+          </span>{" "}
+          — its slope, intercept and R² = {calibration.rSquared.toFixed(4)} come from these points.
+          Dots sitting on the line ⇒ a good fit.
+        </p>
+        <CalibrationFitChart calibration={calibration} />
+      </div>
 
       <div className="grid grid-cols-2 gap-5 rounded-lg border border-line bg-panel p-5 sm:grid-cols-4">
         <Readout label="Slope" value={calibration.slope.toFixed(3)} unit="nm/px" />
