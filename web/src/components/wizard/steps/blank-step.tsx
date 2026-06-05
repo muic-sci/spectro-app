@@ -1,6 +1,6 @@
 /**
  * L3.3 — Blank. In absorbance this is the I₀ (100%-light) reference every
- * absorbance is measured against; in fluorescence it's the background (solvent
+ * absorbance is measured against; in fluorescence it's the blank (solvent
  * scatter / dark) subtracted from each standard. We show its profile once
  * captured.
  */
@@ -47,7 +47,7 @@ export function BlankStep({
           <Icon name="flask" size={26} style={{ color: "var(--accent-color)" }} />
           <p className="max-w-sm text-sm text-t3">
             {isFluor
-              ? "Put the solvent-only cuvette (no sample) in the holder and capture it. We subtract this background from every standard."
+              ? "Put the solvent-only cuvette (no sample) in the holder and capture it. We subtract this blank from every standard."
               : "Put the solvent-only cuvette (no sample) in the holder and capture it. This is your 100%-light reference."}
           </p>
         </div>
@@ -65,14 +65,14 @@ export function BlankStep({
   }
 
   const stripCaption = isFluor
-    ? "The background profile; we subtract it so each standard shows only the dye's emission. Coloured lines mark the calibration wavelengths (nm); the strip below the axis is the captured spectrum, blue (short λ) → red (long λ), left to right."
+    ? "The blank profile; we subtract it so each standard shows only the dye's emission. Coloured lines mark the calibration wavelengths (nm); the strip below the axis is the captured spectrum, blue (short λ) → red (long λ), left to right."
     : "The incident-light profile (I₀); absorbance compares each sample against this. Coloured lines mark the calibration wavelengths (nm); the strip below the axis is the captured spectrum, blue (short λ) → red (long λ), left to right.";
 
   return (
     <div className="flex flex-col gap-5">
       <StatusChip tone="ok">
         <Icon name="check" size={12} />{" "}
-        {isFluor ? "Background captured" : "Blank captured — I₀ recorded"}
+        {isFluor ? "Blank captured" : "Blank captured — I₀ recorded"}
       </StatusChip>
 
       {calibration ? (
@@ -88,7 +88,7 @@ export function BlankStep({
           <SpectrumChart points={profile} xLabel="pixel column" yLabel="intensity" yPrecision={0} />
           <p className="mt-1 text-center text-xs text-t4">
             {isFluor
-              ? "The background profile we subtract from each sample."
+              ? "The blank profile we subtract from each sample."
               : "The incident-light profile (I₀). Absorbance compares each sample against this."}
           </p>
         </div>

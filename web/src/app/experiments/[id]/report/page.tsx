@@ -200,7 +200,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
         </Section>
       )}
 
-      {/* Blank / background */}
+      {/* Blank */}
       {blankImage && derived.blankProfile && (
         <Section title={`2 · ${t.blankLabel}`}>
           {calibration ? (
@@ -212,7 +212,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
               caption={
                 <>
                   {isFluor
-                    ? "The background profile, subtracted from each standard so they show only the dye's emission."
+                    ? "The blank profile, subtracted from each standard so they show only the dye's emission."
                     : "The incident-light profile (I₀); absorbance compares each sample against this."}{" "}
                   Coloured lines mark the calibration wavelengths (nm); the strip below the axis is
                   the captured spectrum, blue → red, left to right.

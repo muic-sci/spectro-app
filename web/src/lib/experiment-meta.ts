@@ -83,7 +83,7 @@ export interface ExperimentTerms {
   signalSymbol: string;
   /** "A@λmax" / "F@λmax". */
   signalAtLambdaMax: string;
-  /** The blank step's name — "Blank (I₀)" / "Background". */
+  /** The blank step's name — "Blank (I₀)" / "Blank". */
   blankLabel: string;
   blankShort: string;
   /** The review step's name — "Absorbance review" / "Emission review". */
@@ -110,8 +110,8 @@ const TERMS: Record<ExperimentMode, ExperimentTerms> = {
     signalAxis: "emission intensity",
     signalSymbol: "F",
     signalAtLambdaMax: "F@λmax",
-    blankLabel: "Background",
-    blankShort: "Background",
+    blankLabel: "Blank",
+    blankShort: "Blank",
     reviewLabel: "Emission review",
     reviewShort: "Emission",
     law: "F = k·c",
@@ -301,12 +301,13 @@ export const STEP_GUIDANCE: Record<WorkflowStep, StepGuidance> = {
 
 /**
  * Fluorescence-specific guidance overrides — only the steps whose science
- * differs from absorbance (blank → background, standards/review/unknown use
- * emission intensity). Steps not listed fall back to {@link STEP_GUIDANCE}.
+ * differs from absorbance (the blank is subtracted not divided,
+ * standards/review/unknown use emission intensity). Steps not listed fall back
+ * to {@link STEP_GUIDANCE}.
  */
 const FLUORESCENCE_GUIDANCE: Partial<Record<WorkflowStep, StepGuidance>> = {
   blank: {
-    why: "The background capture is solvent and cuvette with no sample — any stray light or solvent glow. We subtract it so the standards show only the dye's own emission.",
+    why: "The blank capture is solvent and cuvette with no sample — any stray light or solvent glow. We subtract it so the standards show only the dye's own emission.",
     todo: "Put the solvent-only cuvette in the holder and capture it.",
   },
   standards: {
