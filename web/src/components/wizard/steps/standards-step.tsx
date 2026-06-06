@@ -129,7 +129,14 @@ export function StandardsStep({
               lambdaMax={lambdaMax}
               yLabel={t.signalAxis}
               lambdaMaxColor={lambdaMaxColor}
+              experimentId={experimentId}
             />
+            <p className="mt-1 px-[50px] text-center text-xs text-t4">
+              Drag the λmax line to set it manually —{" "}
+              <span style={{ color: "var(--warn)" }}>amber = auto-detected</span>,{" "}
+              <span style={{ color: "var(--accent-color)" }}>cyan = manually set</span> (use{" "}
+              <em>Auto</em> above to revert).
+            </p>
             {calibration && stripDomain && strips.length > 0 && (
               <div className="mt-2 flex flex-col gap-3">
                 {strips.map(({ s, color }) => (
@@ -149,27 +156,19 @@ export function StandardsStep({
                       slope={calibration.slope}
                       intercept={calibration.intercept}
                       orientation={orientation}
-                      // Laser/fluorescence mode: mark λmax (matching the chart's marker)
-                      // instead of the fixed R/G/B calibration lines, and make it draggable.
+                      // Laser/fluorescence mode: mark λmax (matching the chart's marker,
+                      // static here) instead of the fixed R/G/B calibration lines.
                       lambdaMax={isFluor ? lambdaMax : null}
                       lambdaMaxColor={lambdaMaxColor}
-                      experimentId={isFluor ? experimentId : undefined}
                       bare
                     />
                   </div>
                 ))}
                 <p className="mt-1 text-center text-xs text-t4">
                   Each captured standard strip, blue (short λ) → red (long λ).{" "}
-                  {isFluor ? (
-                    <>
-                      Drag the λmax line to set it manually —{" "}
-                      <span style={{ color: "var(--warn)" }}>amber = auto-detected</span>,{" "}
-                      <span style={{ color: "var(--accent-color)" }}>cyan = manually set</span> (use{" "}
-                      <em>Auto</em> above to revert).
-                    </>
-                  ) : (
-                    "Coloured lines mark the calibration wavelengths (nm)."
-                  )}
+                  {isFluor
+                    ? "The line marks λmax (drag it on the graph above to change it)."
+                    : "Coloured lines mark the calibration wavelengths (nm)."}
                 </p>
               </div>
             )}

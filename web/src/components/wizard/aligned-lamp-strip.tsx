@@ -15,10 +15,8 @@
  * to match the graph above (which the calibration step reverses in the flipped
  * case, keeping the two aligned).
  */
-import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { wavelengthToRgb } from "@/lib/wavelength-color";
-import { setLambdaMaxAction } from "@/app/experiments/[id]/actions";
 
 interface Peak {
   pixelPosition: number;
@@ -41,7 +39,6 @@ export function AlignedLampStrip({
   bare = false,
   lambdaMax = null,
   lambdaMaxColor = "var(--accent-color)",
-  experimentId,
 }: {
   imageUrl: string;
   peaks: Peak[];
@@ -63,12 +60,6 @@ export function AlignedLampStrip({
   lambdaMax?: number | null;
   /** Colour of the λmax line/label — caller distinguishes auto vs manual by this. */
   lambdaMaxColor?: string;
-  /**
-   * When provided alongside `lambdaMax`, the λmax line becomes draggable: dragging
-   * it horizontally sets a manual λmax for the experiment (commits via
-   * setLambdaMaxAction). Omit to render a static λmax line.
-   */
-  experimentId?: string;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -93,59 +84,6 @@ export function AlignedLampStrip({
   const fOf = (pixelPosition: number) => {
     const frac = Math.max(0, Math.min(1, (pixelPosition - minX) / pixRange));
     return ascending ? frac : 1 - frac;
-  };
-
-  // --- Draggable λmax -------------------------------------------------------
-  // The band maps wavelength linearly across its width (blue=lamLow on the left,
-  // red=lamHigh on the right), so a pointer x-fraction inverts straight back to a
-  // wavelength. While dragging we show the optimistic value; once the committed
-  // λmax prop catches up after refresh we drop it.
-  const router = useRouter();
-  const [, startCommit] = useTransition();
-  const [drag, setDrag] = useState<number | null>(null);
-  // Drop the optimistic drag value once the committed λmax prop catches up after
-  // refresh (adjust state during render rather than in an effect).
-  const [lastLambda, setLastLambda] = useState(lambdaMax);
-  if (lambdaMax !== lastLambda) {
-    setLastLambda(lambdaMax);
-    setDrag(null);
-  }
-
-  const draggable = lambdaMax != null && !!experimentId;
-  const shownLambda = drag ?? lambdaMax;
-
-  const lambdaFromClientX = (clientX: number): number => {
-    const el = wrapRef.current;
-    if (!el) return lambdaMax!;
-    const rect = el.getBoundingClientRect();
-    const f = Math.max(0, Math.min(1, (clientX - rect.left) / (rect.width || 1)));
-    return lamLow + f * (lamHigh - lamLow);
-  };
-
-  const commitLambda = (nm: number) => {
-    const fd = new FormData();
-    fd.append("experimentId", experimentId!);
-    fd.append("lambdaMax", String(Math.round(nm * 10) / 10));
-    startCommit(async () => {
-      await setLambdaMaxAction(fd);
-      router.refresh();
-    });
-  };
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (!draggable) return;
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setDrag(lambdaFromClientX(e.clientX));
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (drag == null) return;
-    setDrag(lambdaFromClientX(e.clientX));
-  };
-  const onPointerUp = (e: React.PointerEvent) => {
-    if (drag == null) return;
-    const nm = lambdaFromClientX(e.clientX);
-    commitLambda(nm);
   };
 
   // Load the cropped strip image.
@@ -215,29 +153,21 @@ export function AlignedLampStrip({
           className="block rounded border border-line bg-black"
           style={{ width: "100%", height: BAND_H }}
         />
-        {shownLambda != null ? (
-          // Single thin λmax line (dashed) — same marker style as the chart above.
-          // Map the λmax wavelength back to a pixel via the calibration fit so it
-          // lines up with the strip's pixel-based positioning. When draggable, the
-          // whole sliver is a grab handle (cursor + wide hit area).
+        {lambdaMax != null ? (
+          // Single thin λmax line (dashed) — mirrors the draggable chart marker
+          // above so the strip reads consistently. Map λmax back to a pixel via the
+          // calibration fit so it lines up with the strip's pixel-based positioning.
+          // Static here — λmax is set by dragging the line on the graph, not the strip.
           <div
-            className={`absolute bottom-0 top-0 w-3.5 -translate-x-1/2 ${
-              draggable ? "cursor-ew-resize touch-none" : "pointer-events-none"
-            }`}
-            style={{ left: `${fOf((shownLambda - intercept) / slope) * 100}%` }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
+            className="pointer-events-none absolute bottom-0 top-0"
+            style={{ left: `${fOf((lambdaMax - intercept) / slope) * 100}%` }}
           >
-            <div
-              className="absolute bottom-0 left-1/2 top-0 -translate-x-1/2 border-l border-dashed"
-              style={{ borderColor: lambdaMaxColor }}
-            />
+            <div className="h-full border-l border-dashed" style={{ borderColor: lambdaMaxColor }} />
             <span
-              className="absolute left-1/2 top-0.5 -translate-x-1/2 whitespace-nowrap rounded bg-black/70 px-1 text-[10px]"
+              className="absolute left-0.5 top-0.5 whitespace-nowrap rounded bg-black/70 px-1 text-[10px]"
               style={{ color: lambdaMaxColor }}
             >
-              λmax {Math.round(shownLambda)}
+              λmax {Math.round(lambdaMax)}
             </span>
           </div>
         ) : (
