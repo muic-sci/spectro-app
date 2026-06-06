@@ -115,7 +115,7 @@ export function SignalSpectraCard({
               slope={calibration.slope}
               intercept={calibration.intercept}
               orientation={orientation}
-              lambdaMax={isFluor ? shown : null}
+              lambdaMax={shown}
               lambdaMaxColor={lambdaMaxColor}
               bandHeight={32}
               showWavelengthAxis={false}
@@ -132,10 +132,8 @@ export function SignalSpectraCard({
             />
           ))}
           <p className="mt-1 text-center text-xs text-t4">
-            Each captured standard strip, blue (short λ) → red (long λ).{" "}
-            {isFluor
-              ? "The line marks λmax (drag it on the graph above to change it)."
-              : "Coloured lines mark the calibration wavelengths (nm)."}
+            Each captured standard strip, blue (short λ) → red (long λ). The line marks λmax (drag it
+            on the graph above to change it).
           </p>
         </div>
       )}
