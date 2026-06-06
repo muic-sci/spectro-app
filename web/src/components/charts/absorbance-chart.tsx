@@ -6,14 +6,16 @@
  * the same wavelength axis (same calibration + pixel columns), so we merge them
  * by index into one dataset.
  *
- * The λmax line is **draggable** when `experimentId` is given: a thin grab handle
- * sits over the Recharts `ReferenceLine` and dragging it sets a manual λmax for
- * the experiment (commit via setLambdaMaxAction). The handle is positioned with
- * the same plot-area geometry the strips use (PLOT_LEFT = YAxis width + left
- * margin, PLOT_RIGHT_PAD = right margin) so it lands exactly on the rendered line.
+ * The λmax line is **draggable** when `onLambdaCommit` is given: a thin grab
+ * handle sits over the Recharts `ReferenceLine`. Dragging reports the live
+ * wavelength via `onLambdaDrag` (so the caller can move the marker + any aligned
+ * strips together) and commits on release via `onLambdaCommit`. The chart is
+ * "controlled" — it always renders the `lambdaMax` prop, so the caller owns the
+ * optimistic value. The handle is positioned with the same plot-area geometry the
+ * strips use (PLOT_LEFT = YAxis width + left margin, PLOT_RIGHT_PAD = right
+ * margin) so it lands exactly on the rendered line.
  */
-import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -25,7 +27,6 @@ import {
   YAxis,
 } from "recharts";
 import type { DataPoint } from "@/lib/analysis";
-import { setLambdaMaxAction } from "@/app/experiments/[id]/actions";
 
 export interface AbsorbanceSeries {
   key: string;
@@ -45,7 +46,8 @@ export function AbsorbanceChart({
   height = 280,
   yLabel = "absorbance",
   lambdaMaxColor = "var(--accent-color)",
-  experimentId,
+  onLambdaDrag,
+  onLambdaCommit,
 }: {
   series: AbsorbanceSeries[];
   lambdaMax?: number | null;
@@ -54,11 +56,10 @@ export function AbsorbanceChart({
   yLabel?: string;
   /** λmax marker colour — caller uses it to distinguish auto vs manual λmax. */
   lambdaMaxColor?: string;
-  /**
-   * When provided alongside `lambdaMax`, the λmax line becomes draggable —
-   * dragging it commits a manual λmax for this experiment. Omit for a static line.
-   */
-  experimentId?: string;
+  /** Called continuously while dragging the λmax line (live wavelength, nm). */
+  onLambdaDrag?: (nm: number) => void;
+  /** Called on release with the final wavelength — presence enables dragging. */
+  onLambdaCommit?: (nm: number) => void;
 }) {
   // Merge by index onto a shared wavelength x (series[0] sets the axis).
   const base = series[0]?.points ?? [];
@@ -77,18 +78,6 @@ export function AbsorbanceChart({
   const xMax = xs.length ? Math.max(...xs) : 1;
   const span = xMax - xMin || 1;
 
-  // --- Draggable λmax -------------------------------------------------------
-  const router = useRouter();
-  const [, startCommit] = useTransition();
-  const [drag, setDrag] = useState<number | null>(null);
-  // Drop the optimistic drag value once the committed prop catches up (adjust
-  // state during render rather than in an effect).
-  const [lastLambda, setLastLambda] = useState(lambdaMax);
-  if (lambdaMax !== lastLambda) {
-    setLastLambda(lambdaMax);
-    setDrag(null);
-  }
-
   // Track rendered width so we can position the handle in CSS px.
   const wrapRef = useRef<HTMLDivElement>(null);
   const [wrapW, setWrapW] = useState(0);
@@ -102,43 +91,35 @@ export function AbsorbanceChart({
     return () => ro.disconnect();
   }, []);
 
-  const shownLambda = drag ?? lambdaMax ?? null;
-  const draggable = lambdaMax != null && !!experimentId && data.length > 1;
+  const draggable = lambdaMax != null && !!onLambdaCommit && data.length > 1;
   const plotW = Math.max(1, wrapW - PLOT_LEFT - PLOT_RIGHT_PAD);
+  const dragging = useRef(false);
 
   // Wavelength → CSS px across the plot area, and the inverse from a pointer x.
   const xToPx = (w: number) => PLOT_LEFT + ((w - xMin) / span) * plotW;
   const xFromClientX = (clientX: number): number => {
     const el = wrapRef.current;
-    if (!el) return shownLambda ?? xMin;
+    if (!el) return lambdaMax ?? xMin;
     const rect = el.getBoundingClientRect();
     const f = Math.max(0, Math.min(1, (clientX - rect.left - PLOT_LEFT) / plotW));
     return xMin + f * span;
-  };
-
-  const commitLambda = (nm: number) => {
-    const fd = new FormData();
-    fd.append("experimentId", experimentId!);
-    fd.append("lambdaMax", String(Math.round(nm * 10) / 10));
-    startCommit(async () => {
-      await setLambdaMaxAction(fd);
-      router.refresh();
-    });
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (!draggable) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
-    setDrag(xFromClientX(e.clientX));
+    dragging.current = true;
+    onLambdaDrag?.(xFromClientX(e.clientX));
   };
   const onPointerMove = (e: React.PointerEvent) => {
-    if (drag == null) return;
-    setDrag(xFromClientX(e.clientX));
+    if (!dragging.current) return;
+    onLambdaDrag?.(xFromClientX(e.clientX));
   };
   const onPointerUp = (e: React.PointerEvent) => {
-    if (drag == null) return;
-    commitLambda(xFromClientX(e.clientX));
+    if (!dragging.current) return;
+    dragging.current = false;
+    onLambdaCommit?.(xFromClientX(e.clientX));
   };
 
   return (
@@ -169,12 +150,12 @@ export function AbsorbanceChart({
             itemStyle={{ color: "var(--t1)" }}
             labelFormatter={(v) => `${Math.round(Number(v))} nm`}
           />
-          {shownLambda != null && (
+          {lambdaMax != null && (
             <ReferenceLine
-              x={shownLambda}
+              x={lambdaMax}
               stroke={lambdaMaxColor}
               strokeDasharray="4 2"
-              label={{ value: `λmax ${Math.round(shownLambda)}`, position: "top", fill: lambdaMaxColor, fontSize: 10 }}
+              label={{ value: `λmax ${Math.round(lambdaMax)}`, position: "top", fill: lambdaMaxColor, fontSize: 10 }}
             />
           )}
           {series.map((s) => (
@@ -194,10 +175,10 @@ export function AbsorbanceChart({
 
       {/* Drag handle overlaying the λmax line — a wide transparent grab band with
           a small grip, so the thin reference line is easy to catch (mouse + touch). */}
-      {draggable && shownLambda != null && wrapW > 0 && (
+      {draggable && lambdaMax != null && wrapW > 0 && (
         <div
           className="absolute bottom-0 top-0 w-4 -translate-x-1/2 cursor-ew-resize touch-none"
-          style={{ left: xToPx(shownLambda) }}
+          style={{ left: xToPx(lambdaMax) }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -205,7 +186,7 @@ export function AbsorbanceChart({
           aria-label="λmax"
           aria-valuemin={Math.round(xMin)}
           aria-valuemax={Math.round(xMax)}
-          aria-valuenow={Math.round(shownLambda)}
+          aria-valuenow={Math.round(lambdaMax)}
         >
           <span
             className="absolute left-1/2 top-4 h-3 w-1.5 -translate-x-1/2 rounded-full"

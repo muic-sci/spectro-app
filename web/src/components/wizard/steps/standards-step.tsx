@@ -4,9 +4,9 @@
  * once two are measurable, the calibration curve) so the student watches the
  * graph build as they add standards — no separate review step to advance to.
  */
-import { AbsorbanceChart, type AbsorbanceSeries } from "@/components/charts/absorbance-chart";
+import type { AbsorbanceSeries } from "@/components/charts/absorbance-chart";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
-import { AlignedLampStrip } from "@/components/wizard/aligned-lamp-strip";
+import { SignalSpectraCard } from "@/components/wizard/signal-spectra-card";
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { DeleteButton } from "@/components/wizard/delete-button";
 import { LambdaMaxControl } from "@/components/wizard/lambda-max-control";
@@ -78,9 +78,23 @@ export function StandardsStep({
   }));
 
   // Cropped strip per standard, aligned under the spectra chart (blue→red).
-  const strips = withSpectrum
-    .map((s, i) => ({ s, color: SERIES_COLORS[i % SERIES_COLORS.length] }))
-    .filter((x) => x.s.imageUrl);
+  const stripItems = withSpectrum
+    .map((s, i) => ({
+      id: s.id,
+      imageUrl: s.imageUrl,
+      croppedUrl: `${s.imageUrl}/cropped?v=${version}`,
+      concentration: s.concentration,
+      unit: s.unit,
+      color: SERIES_COLORS[i % SERIES_COLORS.length],
+    }))
+    .filter((x) => x.imageUrl)
+    .map(({ id, croppedUrl, concentration, unit, color }) => ({
+      id,
+      croppedUrl,
+      concentration,
+      unit,
+      color,
+    }));
 
   const curvePoints = standards
     .filter((s) => s.absorbanceAtLambdaMax != null)
@@ -122,57 +136,19 @@ export function StandardsStep({
         <div className="flex flex-col gap-5 border-t border-line-soft pt-5">
           <LambdaMaxControl key={lambdaMax} experimentId={experimentId} lambdaMax={lambdaMax} isFluor={isFluor} />
 
-          <div className="rounded-lg border border-line bg-panel p-4">
-            <h3 className="mb-2 text-sm font-semibold text-t2">{t.signal} spectra</h3>
-            <AbsorbanceChart
-              series={series}
-              lambdaMax={lambdaMax}
-              yLabel={t.signalAxis}
-              lambdaMaxColor={lambdaMaxColor}
-              experimentId={experimentId}
-            />
-            <p className="mt-1 px-[50px] text-center text-xs text-t4">
-              Drag the λmax line to set it manually —{" "}
-              <span style={{ color: "var(--warn)" }}>amber = auto-detected</span>,{" "}
-              <span style={{ color: "var(--accent-color)" }}>cyan = manually set</span> (use{" "}
-              <em>Auto</em> above to revert).
-            </p>
-            {calibration && stripDomain && strips.length > 0 && (
-              <div className="mt-2 flex flex-col gap-3">
-                {strips.map(({ s, color }) => (
-                  <div key={s.id}>
-                    <div className="mb-1 flex items-center gap-1.5 pl-[50px] text-xs text-t3">
-                      <span
-                        className="inline-block h-2 w-2 shrink-0 rounded-full"
-                        style={{ background: color }}
-                      />
-                      {s.concentration} {s.unit}
-                    </div>
-                    <AlignedLampStrip
-                      imageUrl={`${s.imageUrl}/cropped?v=${version}`}
-                      peaks={calibration.peaks}
-                      minX={stripDomain.minX}
-                      maxX={stripDomain.maxX}
-                      slope={calibration.slope}
-                      intercept={calibration.intercept}
-                      orientation={orientation}
-                      // Laser/fluorescence mode: mark λmax (matching the chart's marker,
-                      // static here) instead of the fixed R/G/B calibration lines.
-                      lambdaMax={isFluor ? lambdaMax : null}
-                      lambdaMaxColor={lambdaMaxColor}
-                      bare
-                    />
-                  </div>
-                ))}
-                <p className="mt-1 text-center text-xs text-t4">
-                  Each captured standard strip, blue (short λ) → red (long λ).{" "}
-                  {isFluor
-                    ? "The line marks λmax (drag it on the graph above to change it)."
-                    : "Coloured lines mark the calibration wavelengths (nm)."}
-                </p>
-              </div>
-            )}
-          </div>
+          <SignalSpectraCard
+            title={`${t.signal} spectra`}
+            experimentId={experimentId}
+            series={series}
+            lambdaMax={lambdaMax}
+            lambdaMaxColor={lambdaMaxColor}
+            signalAxis={t.signalAxis}
+            calibration={calibration}
+            stripDomain={stripDomain}
+            strips={stripItems}
+            orientation={orientation}
+            showLambdaOnStrip={isFluor}
+          />
 
           {curve && verdict ? (
             <>
