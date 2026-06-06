@@ -163,12 +163,6 @@ export function AlignedLampStrip({
             style={{ left: `${fOf((lambdaMax - intercept) / slope) * 100}%` }}
           >
             <div className="h-full border-l border-dashed" style={{ borderColor: lambdaMaxColor }} />
-            <span
-              className="absolute left-0.5 top-0.5 whitespace-nowrap rounded bg-black/70 px-1 text-[10px]"
-              style={{ color: lambdaMaxColor }}
-            >
-              λmax {Math.round(lambdaMax)}
-            </span>
           </div>
         ) : (
           peaks.map((p, i) => {
