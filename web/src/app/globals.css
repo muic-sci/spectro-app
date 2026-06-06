@@ -112,6 +112,74 @@
   --radius: var(--r-md);
 }
 
+/* ── Light palette — report page only (theme toggle + printing). ───────────
+ * The app is dark-only, but the report is a document: it can be toggled to
+ * light and is forced light when printing (so output is ink-light on white).
+ * Applied via [data-theme="light"] on the report wrapper; because the utilities
+ * are @theme-inline (var(--token) used directly), redefining the tokens here
+ * re-themes the whole subtree — Tailwind classes AND the Recharts charts. */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --desk: oklch(1 0 0);
+  --bg: oklch(0.985 0.002 256);
+  --panel: oklch(0.978 0.003 256);
+  --panel-2: oklch(0.952 0.004 256);
+  --raised: oklch(0.93 0.005 256);
+  --line: oklch(0.86 0.008 256);
+  --line-soft: oklch(0.91 0.006 256);
+
+  --t1: oklch(0.24 0.02 256);
+  --t2: oklch(0.4 0.018 256);
+  --t3: oklch(0.52 0.016 258);
+  --t4: oklch(0.62 0.014 258);
+
+  --accent-color: oklch(0.58 0.13 222);
+  --accent-dim: oklch(0.8 0.06 199);
+  --accent-ink: oklch(1 0 0);
+  --accent-glow: oklch(0.58 0.13 222 / 0.22);
+
+  --ok: oklch(0.55 0.14 152);
+  --warn: oklch(0.62 0.12 79);
+  --danger-color: oklch(0.55 0.2 26);
+  --ok-bg: oklch(0.55 0.14 152 / 0.12);
+  --warn-bg: oklch(0.62 0.12 79 / 0.14);
+  --danger-soft-bg: oklch(0.55 0.2 26 / 0.12);
+
+  --shadow-design:
+    0 14px 40px -16px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.04);
+
+  /* HeroUI semantic tokens → light primitives (mirrors the dark block) */
+  --background: var(--desk);
+  --foreground: var(--t1);
+  --surface: var(--panel);
+  --surface-foreground: var(--t1);
+  --surface-secondary: var(--panel-2);
+  --surface-secondary-foreground: var(--t1);
+  --surface-tertiary: var(--raised);
+  --surface-tertiary-foreground: var(--t1);
+  --overlay: var(--panel);
+  --overlay-foreground: var(--t1);
+  --muted: var(--t3);
+  --default: var(--panel-2);
+  --default-foreground: var(--t1);
+  --accent: var(--accent-color);
+  --accent-foreground: var(--accent-ink);
+  --field-background: var(--panel-2);
+  --field-foreground: var(--t1);
+  --field-placeholder: var(--t3);
+  --success: var(--ok);
+  --success-foreground: oklch(1 0 0);
+  --warning: var(--warn);
+  --warning-foreground: oklch(1 0 0);
+  --danger: var(--danger-color);
+  --danger-foreground: oklch(1 0 0);
+  --border: var(--line);
+  --separator: var(--line-soft);
+  --focus: var(--accent-color);
+  --link: var(--accent-color);
+}
+
 /* ── Expose design tokens to Tailwind v4 as utilities ────────────────────── *
  * `inline` keeps the utilities referencing the live CSS variables above, so
  * e.g. `bg-panel`, `text-t2`, `rounded-lg`, `font-mono` all track the theme.   */
@@ -159,15 +227,17 @@ body {
   background: var(--accent-glow);
 }
 
-/* Report printing: drop interactive chrome, keep colours + sections intact. */
+/* Report printing: drop interactive chrome; print on white (the report wrapper
+ * is forced to data-theme="light" during printing, see report-theme.tsx). */
 @media print {
   .no-print {
     display: none !important;
   }
+  html,
   body {
-    background: var(--desk);
+    background: #fff;
   }
-  /* honour our dark surfaces/charts when the user enables background graphics */
+  /* honour our surface/chart colours when the user enables background graphics */
   * {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
