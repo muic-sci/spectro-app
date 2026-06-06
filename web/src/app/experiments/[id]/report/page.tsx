@@ -44,6 +44,20 @@ function ImageStrip({ src, label }: { src: string; label: string }) {
   );
 }
 
+/** A bordered explanatory note — teaches what a section's plots show + the maths. */
+function Explainer({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-line-soft bg-panel-2 p-4 text-sm leading-relaxed text-t2">
+      {children}
+    </div>
+  );
+}
+
+/** Inline monospace formula. */
+function Formula({ children }: { children: React.ReactNode }) {
+  return <span className="mono whitespace-nowrap text-t1">{children}</span>;
+}
+
 /** Full experiment report — every captured strip, every plot, every result. */
 export default async function ReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -183,9 +197,99 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
         )}
       </Section>
 
+      {/* Method — how a photo of light becomes a concentration */}
+      <Section title="Method — how the spectrum is measured">
+        <Explainer>
+          <p className="mb-3">
+            This report documents a complete{" "}
+            <b className="text-t1">{isFluor ? "fluorescence" : "Beer-Lambert absorbance"} quantitation</b>{" "}
+            run. Every capture is a photo of light spread into a spectrum by a diffraction grating — a
+            band where position corresponds to wavelength (colour). The steps below turn those photos
+            into a concentration.
+          </p>
+          <ol className="flex list-decimal flex-col gap-2 pl-5 marker:text-t4">
+            <li>
+              <b className="text-t1">Capture.</b> The phone photographs the spectrum with focus and
+              exposure <em>locked</em>, so every photo is directly comparable (the same brightness
+              means the same amount of light).
+            </li>
+            <li>
+              <b className="text-t1">Region of interest (ROI).</b> One rectangle is drawn over the
+              bright band and reused for every capture, so all measurements come from the exact same
+              pixels{roi ? ` (here ${roi.width}×${roi.height} px, ${experiment.orientation})` : " (the full strip)"}.
+            </li>
+            <li>
+              <b className="text-t1">Intensity profile.</b> Inside the ROI the app averages pixels
+              across the short axis (perpendicular to the colour spread), collapsing the 2-D patch
+              into one brightness value per position along the band. Phone JPEGs are gamma-encoded
+              (sRGB), so each red/green/blue channel is first <em>linearised</em> —{" "}
+              <Formula>C_lin = ((C+0.055)/1.055)^2.4</Formula> — so the numbers track real light, then
+              combined into one intensity (luminance <Formula>0.299R+0.587G+0.114B</Formula>; the
+              calibration capture instead uses <Formula>max(R,G,B)</Formula> so faint blue/violet
+              lines aren&apos;t lost).
+            </li>
+            <li>
+              <b className="text-t1">Wavelength calibration (pixel → nm).</b>{" "}
+              {isLaser
+                ? "Each laser has a known wavelength; the app finds each laser's bright line in the profile and fits a straight line through those points."
+                : "A fluorescent lamp emits at fixed, known wavelengths (434.5, 486, 544, 587, 611.5 nm). The app locates those bright peaks and fits a straight line through them."}{" "}
+              The fit <Formula>λ = slope·pixel + intercept</Formula> converts every pixel column to a
+              wavelength for all later plots.
+            </li>
+            <li>
+              <b className="text-t1">Blank.</b>{" "}
+              {isFluor
+                ? "A blank (solvent + cuvette, no dye) records the background light, which is subtracted from every sample."
+                : "A cuvette of pure solvent records the incident light I₀ — how bright each wavelength is with nothing absorbing."}
+            </li>
+            <li>
+              <b className="text-t1">Standard spectra.</b> For each standard of known concentration,{" "}
+              {isFluor ? (
+                <>
+                  emission is <Formula>F(λ) = I − I₀</Formula> at every wavelength — the sample&apos;s
+                  glow above background.
+                </>
+              ) : (
+                <>
+                  absorbance is <Formula>A(λ) = −log₁₀(I / I₀)</Formula> at every wavelength — how much
+                  light the sample removed relative to the blank.
+                </>
+              )}
+            </li>
+            <li>
+              <b className="text-t1">λmax.</b> The wavelength of strongest signal (taken from the most
+              concentrated standard, or set by hand). All quantitation uses this single wavelength,
+              where the signal is largest and noise matters least.
+            </li>
+            <li>
+              <b className="text-t1">Calibration curve.</b> Each standard&apos;s signal at λmax is
+              plotted against its concentration and fitted with a straight line —{" "}
+              <Formula>{t.law}</Formula>. A high R² confirms the signal scales linearly with
+              concentration, as theory predicts.
+            </li>
+            <li>
+              <b className="text-t1">Unknown.</b> The unknown is measured the same way; its signal at
+              λmax is read off the line, inverted — <Formula>c = (signal − intercept) / slope</Formula>
+              . A value beyond the standards&apos; range is extrapolated and flagged as less reliable.
+            </li>
+          </ol>
+        </Explainer>
+      </Section>
+
       {/* Camera & calibration */}
       {calImage && (
         <Section title="1 · Camera, region & calibration">
+          <Explainer>
+            <b className="text-t1">What this shows.</b> The {isLaser ? "combined laser" : "lamp"}{" "}
+            capture used to learn the wavelength scale, with the analysis rectangle (ROI) outlined.
+            The chart plots brightness vs pixel column along the band; the coloured dashes/dots are
+            the {isLaser ? "laser lines" : "emission lines"} the detector found, and the strip beneath
+            the axis is the actual cropped photo (blue, short λ → red, long λ). Because pixel→wavelength
+            is linear, plotting those lines against their <em>known</em> wavelengths gives a straight
+            line — the fit <Formula>λ = slope·px + intercept</Formula> (bottom chart) is what converts
+            pixels to nanometres throughout this report. A high R² (near 1) means the conversion is
+            trustworthy.
+          </Explainer>
           <div className="flex flex-wrap gap-5">
             <div className="flex flex-col gap-2">
               <RoiPreview imageUrl={calImage.url} roi={roi} />
@@ -240,6 +344,24 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
       {/* Blank */}
       {blankImage && derived.blankProfile && (
         <Section title={`2 · ${t.blankLabel}`}>
+          <Explainer>
+            <b className="text-t1">What this shows.</b>{" "}
+            {isFluor ? (
+              <>
+                The background capture (solvent + cuvette, no dye). It is{" "}
+                <em>subtracted</em> from every sample — <Formula>F = I − I₀</Formula> — so the spectra
+                show only the dye&apos;s own emission, not stray light or solvent glow.
+              </>
+            ) : (
+              <>
+                The solvent/cuvette capture with no analyte. Its intensity profile is the incident
+                light <Formula>I₀</Formula> — the brightness reaching the detector at each wavelength
+                before anything absorbs. Every standard and unknown is divided by it, wavelength by
+                wavelength, to get absorbance <Formula>A = −log₁₀(I / I₀)</Formula>.
+              </>
+            )}{" "}
+            The strip below the axis is the captured spectrum (blue → red, left to right).
+          </Explainer>
           {calibration ? (
             <SpectrumWithStrip
               points={derived.blankProfile}
@@ -270,6 +392,21 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
       {/* Standards spectra (read-only — same chart + strips as the wizard) */}
       {absSeries.length > 0 && lambdaMax != null && (
         <Section title={`3 · ${t.signal} spectra`}>
+          <Explainer>
+            <b className="text-t1">What this shows.</b> Each standard&apos;s {t.signalAxis} spectrum,
+            computed{" "}
+            {isFluor ? (
+              <Formula>F = I − I₀</Formula>
+            ) : (
+              <Formula>A = −log₁₀(I / I₀)</Formula>
+            )}{" "}
+            at every wavelength and overlaid by concentration (low → high). Higher concentrations sit{" "}
+            {isFluor ? "brighter (more emission)" : "higher (more light absorbed)"}. The vertical line
+            marks <b className="text-t1">λmax = {lambdaMax.toFixed(1)} nm</b> — the single wavelength
+            used for quantitation. The slim strips beneath are each standard&apos;s cropped capture,
+            drawn on the same wavelength axis so you can see the band darken/brighten with
+            concentration.
+          </Explainer>
           <SignalSpectraCard
             readOnly
             title={`${t.signal} spectra`}
@@ -285,6 +422,13 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
           />
           {curve && (
             <div className="rounded-lg border border-line bg-panel p-4">
+              <p className="mb-3 text-sm leading-relaxed text-t2">
+                <b className="text-t1">What this shows.</b> Each standard&apos;s{" "}
+                {t.signalSymbol}@λmax plotted against its known concentration, with the least-squares
+                line <Formula>{t.law}</Formula> (slope = {curve.slope.toFixed(4)}, R² ={" "}
+                {curve.rSquared.toFixed(4)}). The closer R² is to 1, the more linear the response. The
+                unknowns are placed on this line at their measured signal to read off concentration.
+              </p>
               <div className="mb-2 flex items-center gap-2">
                 <h3 className="text-sm font-semibold text-t2">
                   {isFluor ? "Calibration curve" : "Beer-Lambert curve"}
@@ -303,6 +447,15 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
       {/* Unknowns */}
       {derived.unknowns.length > 0 && (
         <Section title="4 · Unknown samples">
+          <Explainer>
+            <b className="text-t1">What this shows.</b> Each unknown captured and processed exactly
+            like a standard. Its spectrum is read at λmax to get {t.signalSymbol}@λmax, then the
+            calibration line is inverted to find concentration —{" "}
+            <Formula>c = ({t.signalSymbol} − intercept) / slope</Formula>. The marker on each spectrum
+            is λmax. A result tagged <em>extrapolated</em> means the signal fell outside the range the
+            standards covered, so it is less reliable — prepare a standard nearer that level to
+            confirm it.
+          </Explainer>
           {derived.unknowns.map((u, i) => (
             <div key={u.id} className="flex flex-wrap items-start gap-5 rounded-lg border border-line bg-panel p-4">
               {u.imageUrl && <ImageStrip src={cropped(u.imageUrl)} label={`Unknown #${i + 1} (cropped)`} />}
@@ -332,6 +485,12 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
 
       {/* Data table */}
       <Section title="Data">
+        <Explainer>
+          <b className="text-t1">What this shows.</b> The numbers behind the plots — every
+          sample&apos;s concentration and {t.signalSymbol}@λmax in one table. Standards are the known
+          points that built the curve; unknowns are the values read back from it. Use{" "}
+          <em>Export CSV</em> (top of the page) for a spreadsheet copy.
+        </Explainer>
         <div className="overflow-hidden rounded-lg border border-line">
           <table className="w-full text-sm">
             <thead>
