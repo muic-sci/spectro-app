@@ -8,9 +8,10 @@ import { parseRoi, parseProfile } from "@/lib/experiment-json";
 import { deriveAnalysis } from "@/lib/experiment-analysis";
 import { wavelengthToRgb } from "@/lib/wavelength-color";
 import { SpectrumChart } from "@/components/charts/spectrum-chart";
-import { AbsorbanceChart, type AbsorbanceSeries } from "@/components/charts/absorbance-chart";
+import { type AbsorbanceSeries } from "@/components/charts/absorbance-chart";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
 import { CalibrationFitChart } from "@/components/charts/calibration-fit-chart";
+import { SignalSpectraCard } from "@/components/wizard/signal-spectra-card";
 import { SpectrumWithStrip } from "@/components/wizard/spectrum-with-strip";
 import { DetectedPeaksTable } from "@/components/wizard/detected-peaks-table";
 import { PrintButton } from "@/components/report/print-button";
@@ -81,14 +82,37 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const isFluor = experiment.mode === "fluorescence";
   const isLaser = experiment.lightType === "laser";
 
-  const absSeries: AbsorbanceSeries[] = derived.standards
-    .filter((s) => s.spectrum)
+  // Standards with a spectrum, in chart order — the colour index is shared by the
+  // overlay line and its strip below (matches the wizard's SignalSpectraCard).
+  const withSpectrum = derived.standards.filter((s) => s.spectrum);
+  const absSeries: AbsorbanceSeries[] = withSpectrum.map((s, i) => ({
+    key: `s${i}`,
+    label: `${s.concentration} ${s.unit}`,
+    color: SERIES_COLORS[i % SERIES_COLORS.length],
+    points: s.spectrum!.points,
+  }));
+  const stripItems = withSpectrum
     .map((s, i) => ({
-      key: `s${i}`,
-      label: `${s.concentration} ${s.unit}`,
+      id: s.id,
+      imageUrl: s.imageUrl,
+      concentration: s.concentration,
+      unit: s.unit,
       color: SERIES_COLORS[i % SERIES_COLORS.length],
-      points: s.spectrum!.points,
+    }))
+    .filter((x) => x.imageUrl)
+    .map((x) => ({
+      id: x.id,
+      croppedUrl: cropped(x.imageUrl as string),
+      concentration: x.concentration,
+      unit: x.unit,
+      color: x.color,
     }));
+  // Pixel domain shared by every capture (same ROI), from the lamp profile — lets
+  // each standard strip align with the chart's λmax marker.
+  const stripDomain =
+    calProfile && calProfile.length
+      ? { minX: calProfile[0].x, maxX: calProfile[calProfile.length - 1].x }
+      : null;
   const curvePoints = derived.standards
     .filter((s) => s.absorbanceAtLambdaMax != null)
     .map((s) => ({ concentration: s.concentration, absorbance: s.absorbanceAtLambdaMax as number }));
@@ -243,22 +267,22 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
         </Section>
       )}
 
-      {/* Standards */}
-      {derived.standards.length > 0 && (
-        <Section title="3 · Standards">
-          <div className="flex flex-wrap gap-4">
-            {derived.standards.map((s) => (
-              <div key={s.id} className="flex flex-col gap-1">
-                {s.imageUrl && <ImageStrip src={cropped(s.imageUrl)} label={`${s.concentration} ${s.unit} · ${t.signalSymbol}=${s.absorbanceAtLambdaMax?.toFixed(3) ?? "—"}`} />}
-              </div>
-            ))}
-          </div>
-          {absSeries.length > 0 && lambdaMax != null && (
-            <div className="rounded-lg border border-line bg-panel p-4">
-              <h3 className="mb-2 text-sm font-semibold text-t2">{t.signal} spectra</h3>
-              <AbsorbanceChart series={absSeries} lambdaMax={lambdaMax} yLabel={t.signalAxis} />
-            </div>
-          )}
+      {/* Standards spectra (read-only — same chart + strips as the wizard) */}
+      {absSeries.length > 0 && lambdaMax != null && (
+        <Section title={`3 · ${t.signal} spectra`}>
+          <SignalSpectraCard
+            readOnly
+            title={`${t.signal} spectra`}
+            series={absSeries}
+            lambdaMax={lambdaMax}
+            isManual={experiment.lambdaMax != null}
+            signalAxis={t.signalAxis}
+            calibration={calibration}
+            stripDomain={stripDomain}
+            strips={stripItems}
+            orientation={experiment.orientation}
+            isFluor={isFluor}
+          />
           {curve && (
             <div className="rounded-lg border border-line bg-panel p-4">
               <div className="mb-2 flex items-center gap-2">

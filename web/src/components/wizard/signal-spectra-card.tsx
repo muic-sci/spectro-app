@@ -9,6 +9,9 @@
  * the drag — not just after the value is committed. The commit (setLambdaMaxAction
  * + router.refresh) also lives here; the optimistic value is held through the
  * refresh and dropped once the committed prop catches up.
+ *
+ * Pass `readOnly` (e.g. in the printable report) to render the same chart + strips
+ * with NO λmax control, NO header, and a non-draggable line — a static view.
  */
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -39,9 +42,11 @@ export function SignalSpectraCard({
   strips,
   orientation,
   isFluor,
+  readOnly = false,
 }: {
   title: string;
-  experimentId: string;
+  /** Required unless readOnly — the experiment whose λmax this card edits. */
+  experimentId?: string;
   series: AbsorbanceSeries[];
   /** Committed λmax (from the server). */
   lambdaMax: number;
@@ -54,6 +59,8 @@ export function SignalSpectraCard({
   orientation: "horizontal" | "vertical";
   /** Fluorescence/laser mode — strips mark λmax instead of the calibration peaks. */
   isFluor: boolean;
+  /** Static view: no control, no header, non-draggable λmax line (e.g. the report). */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [, startCommit] = useTransition();
@@ -72,6 +79,7 @@ export function SignalSpectraCard({
   const shown = live ?? lambdaMax;
 
   const commit = (nm: number) => {
+    if (!experimentId) return;
     setLive(nm); // hold the dragged value visible through the refresh
     const fd = new FormData();
     fd.append("experimentId", experimentId);
@@ -84,24 +92,26 @@ export function SignalSpectraCard({
 
   return (
     <div className="rounded-lg border border-line bg-panel p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-t2">{title}</h3>
-        <LambdaMaxControl
-          key={lambdaMax}
-          experimentId={experimentId}
-          lambdaMax={lambdaMax}
-          isFluor={isFluor}
-          isManual={isManual}
-          bare
-        />
-      </div>
+      {!readOnly && experimentId && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-t2">{title}</h3>
+          <LambdaMaxControl
+            key={lambdaMax}
+            experimentId={experimentId}
+            lambdaMax={lambdaMax}
+            isFluor={isFluor}
+            isManual={isManual}
+            bare
+          />
+        </div>
+      )}
       <AbsorbanceChart
         series={series}
         lambdaMax={shown}
         yLabel={signalAxis}
         lambdaMaxColor={lambdaMaxColor}
-        onLambdaDrag={setLive}
-        onLambdaCommit={commit}
+        onLambdaDrag={readOnly ? undefined : setLive}
+        onLambdaCommit={readOnly ? undefined : commit}
       />
       {calibration && stripDomain && strips.length > 0 && (
         <div className="mt-2 flex flex-col gap-1">
@@ -132,8 +142,8 @@ export function SignalSpectraCard({
             />
           ))}
           <p className="mt-1 text-center text-xs text-t4">
-            Each captured standard strip, blue (short λ) → red (long λ). The line marks λmax (drag it
-            on the graph above to change it).
+            Each captured standard strip, blue (short λ) → red (long λ). The line marks λmax
+            {readOnly ? "." : " (drag it on the graph above to change it)."}
           </p>
         </div>
       )}
