@@ -24,10 +24,13 @@ export function LambdaMaxControl({
   experimentId,
   lambdaMax,
   isFluor,
+  bare = false,
 }: {
   experimentId: string;
   lambdaMax: number;
   isFluor: boolean;
+  /** Drop the card chrome + help text so it can sit inside another card's header. */
+  bare?: boolean;
 }) {
   const router = useRouter();
   const [value, setValue] = useState(() => String(Math.round(lambdaMax * 10) / 10));
@@ -45,7 +48,11 @@ export function LambdaMaxControl({
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-panel p-4">
+    <div
+      className={`flex flex-wrap items-end gap-3 ${
+        bare ? "" : "rounded-lg border border-line bg-panel p-4"
+      }`}
+    >
       <label className="flex flex-col gap-1">
         <span className="text-xs uppercase tracking-wide text-t3">λmax (nm)</span>
         <input
@@ -63,10 +70,12 @@ export function LambdaMaxControl({
       <Button variant="ghost" isDisabled={pending} onClick={() => run(true)}>
         Auto
       </Button>
-      <span className="ml-auto text-xs text-t4">
-        λmax is where your compound {isFluor ? "emits" : "absorbs"} most — measure there for the
-        strongest signal.
-      </span>
+      {!bare && (
+        <span className="ml-auto text-xs text-t4">
+          λmax is where your compound {isFluor ? "emits" : "absorbs"} most — measure there for the
+          strongest signal.
+        </span>
+      )}
     </div>
   );
 }

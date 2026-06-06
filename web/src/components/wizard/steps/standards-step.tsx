@@ -9,7 +9,6 @@ import { CalibrationCurveChart } from "@/components/charts/calibration-curve-cha
 import { SignalSpectraCard } from "@/components/wizard/signal-spectra-card";
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { DeleteButton } from "@/components/wizard/delete-button";
-import { LambdaMaxControl } from "@/components/wizard/lambda-max-control";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
 import { deleteStandardAction } from "@/app/experiments/[id]/actions";
 import type { DerivedAnalysis } from "@/lib/experiment-analysis";
@@ -134,8 +133,6 @@ export function StandardsStep({
       {/* Live review — the graph builds as standards are added. */}
       {series.length > 0 && lambdaMax != null && (
         <div className="flex flex-col gap-5 border-t border-line-soft pt-5">
-          <LambdaMaxControl key={lambdaMax} experimentId={experimentId} lambdaMax={lambdaMax} isFluor={isFluor} />
-
           <SignalSpectraCard
             title={`${t.signal} spectra`}
             experimentId={experimentId}
@@ -147,7 +144,7 @@ export function StandardsStep({
             stripDomain={stripDomain}
             strips={stripItems}
             orientation={orientation}
-            showLambdaOnStrip={isFluor}
+            isFluor={isFluor}
           />
 
           {curve && verdict ? (

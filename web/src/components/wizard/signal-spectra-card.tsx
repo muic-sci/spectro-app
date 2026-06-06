@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { AbsorbanceChart, type AbsorbanceSeries } from "@/components/charts/absorbance-chart";
 import { AlignedLampStrip } from "@/components/wizard/aligned-lamp-strip";
+import { LambdaMaxControl } from "@/components/wizard/lambda-max-control";
 import { setLambdaMaxAction } from "@/app/experiments/[id]/actions";
 import type { Calibration } from "@/lib/analysis";
 
@@ -37,7 +38,7 @@ export function SignalSpectraCard({
   stripDomain,
   strips,
   orientation,
-  showLambdaOnStrip,
+  isFluor,
 }: {
   title: string;
   experimentId: string;
@@ -51,7 +52,7 @@ export function SignalSpectraCard({
   strips: SpectraStrip[];
   orientation: "horizontal" | "vertical";
   /** Fluorescence/laser mode — strips mark λmax instead of the calibration peaks. */
-  showLambdaOnStrip: boolean;
+  isFluor: boolean;
 }) {
   const router = useRouter();
   const [, startCommit] = useTransition();
@@ -79,7 +80,16 @@ export function SignalSpectraCard({
 
   return (
     <div className="rounded-lg border border-line bg-panel p-4">
-      <h3 className="mb-2 text-sm font-semibold text-t2">{title}</h3>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-t2">{title}</h3>
+        <LambdaMaxControl
+          key={lambdaMax}
+          experimentId={experimentId}
+          lambdaMax={lambdaMax}
+          isFluor={isFluor}
+          bare
+        />
+      </div>
       <AbsorbanceChart
         series={series}
         lambdaMax={shown}
@@ -110,7 +120,7 @@ export function SignalSpectraCard({
                 slope={calibration.slope}
                 intercept={calibration.intercept}
                 orientation={orientation}
-                lambdaMax={showLambdaOnStrip ? shown : null}
+                lambdaMax={isFluor ? shown : null}
                 lambdaMaxColor={lambdaMaxColor}
                 bare
               />
@@ -118,7 +128,7 @@ export function SignalSpectraCard({
           ))}
           <p className="mt-1 text-center text-xs text-t4">
             Each captured standard strip, blue (short λ) → red (long λ).{" "}
-            {showLambdaOnStrip
+            {isFluor
               ? "The line marks λmax (drag it on the graph above to change it)."
               : "Coloured lines mark the calibration wavelengths (nm)."}
           </p>
