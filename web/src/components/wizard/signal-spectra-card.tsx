@@ -98,12 +98,6 @@ export function SignalSpectraCard({
         onLambdaDrag={setLive}
         onLambdaCommit={commit}
       />
-      <p className="mt-1 px-[50px] text-center text-xs text-t4">
-        Drag the λmax line to set it manually —{" "}
-        <span style={{ color: "var(--warn)" }}>amber = auto-detected</span>,{" "}
-        <span style={{ color: "var(--accent-color)" }}>cyan = manually set</span> (use{" "}
-        <em>Auto</em> above to revert).
-      </p>
       {calibration && stripDomain && strips.length > 0 && (
         <div className="mt-2 flex flex-col gap-3">
           {strips.map((s) => (
@@ -122,6 +116,8 @@ export function SignalSpectraCard({
                 orientation={orientation}
                 lambdaMax={isFluor ? shown : null}
                 lambdaMaxColor={lambdaMaxColor}
+                bandHeight={32}
+                showWavelengthAxis={false}
                 bare
               />
             </div>

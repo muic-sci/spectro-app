@@ -23,7 +23,7 @@ interface Peak {
   knownWavelength: number;
 }
 
-const BAND_H = 64; // CSS px height of the horizontal strip band
+const DEFAULT_BAND_H = 64; // CSS px height of the horizontal strip band
 // Match the chart's plot area (YAxis width + margins) so the band lines up under it.
 const PAD_LEFT = 50;
 const PAD_RIGHT = 18;
@@ -39,6 +39,8 @@ export function AlignedLampStrip({
   bare = false,
   lambdaMax = null,
   lambdaMaxColor = "var(--accent-color)",
+  bandHeight = DEFAULT_BAND_H,
+  showWavelengthAxis = true,
 }: {
   imageUrl: string;
   peaks: Peak[];
@@ -60,6 +62,10 @@ export function AlignedLampStrip({
   lambdaMax?: number | null;
   /** Colour of the λmax line/label — caller distinguishes auto vs manual by this. */
   lambdaMaxColor?: string;
+  /** Band height in CSS px (default 64). */
+  bandHeight?: number;
+  /** Show the blue/red nm boundary labels under the band (default true). */
+  showWavelengthAxis?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -113,7 +119,7 @@ export function AlignedLampStrip({
     if (!canvas || !img || !bandW) return;
     const dpr = window.devicePixelRatio || 1;
     const cw = bandW;
-    const ch = BAND_H;
+    const ch = bandHeight;
     canvas.width = Math.round(cw * dpr);
     canvas.height = Math.round(ch * dpr);
     const ctx = canvas.getContext("2d");
@@ -143,7 +149,7 @@ export function AlignedLampStrip({
       ctx.drawImage(img, 0, 0, ch, cw);
     }
     ctx.restore();
-  }, [img, bandW, ascending, vertical]);
+  }, [img, bandW, ascending, vertical, bandHeight]);
 
   const band = (
     <div style={{ paddingLeft: PAD_LEFT, paddingRight: PAD_RIGHT }}>
@@ -151,7 +157,7 @@ export function AlignedLampStrip({
         <canvas
           ref={canvasRef}
           className="block rounded border border-line bg-black"
-          style={{ width: "100%", height: BAND_H }}
+          style={{ width: "100%", height: bandHeight }}
         />
         {lambdaMax != null ? (
           // Single thin λmax line (dashed) — mirrors the draggable chart marker
@@ -190,10 +196,12 @@ export function AlignedLampStrip({
       </div>
 
       {/* Wavelength axis: short λ (blue) on the left, long λ (red) on the right. */}
-      <div className="mt-1 flex justify-between text-[10px] text-t4">
-        <span>← {Math.round(lamLow)} nm (blue)</span>
-        <span>(red) {Math.round(lamHigh)} nm →</span>
-      </div>
+      {showWavelengthAxis && (
+        <div className="mt-1 flex justify-between text-[10px] text-t4">
+          <span>← {Math.round(lamLow)} nm (blue)</span>
+          <span>(red) {Math.round(lamHigh)} nm →</span>
+        </div>
+      )}
     </div>
   );
 
