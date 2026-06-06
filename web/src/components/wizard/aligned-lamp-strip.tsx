@@ -37,6 +37,7 @@ export function AlignedLampStrip({
   intercept,
   orientation = "horizontal",
   bare = false,
+  lambdaMax = null,
 }: {
   imageUrl: string;
   peaks: Peak[];
@@ -49,6 +50,13 @@ export function AlignedLampStrip({
   orientation?: "horizontal" | "vertical";
   /** Drop the card chrome/header/caption so it can sit directly under a chart's axis. */
   bare?: boolean;
+  /**
+   * When set, draw a single thin λmax line (accent, dashed — matching the chart's
+   * λmax marker) INSTEAD of the calibration-wavelength peaks. Used by the standards
+   * spectra strips so each strip is annotated with the measured λmax, not the
+   * fixed calibration lines.
+   */
+  lambdaMax?: number | null;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -142,24 +150,42 @@ export function AlignedLampStrip({
           className="block rounded border border-line bg-black"
           style={{ width: "100%", height: BAND_H }}
         />
-        {peaks.map((p, i) => {
-          const color = wavelengthToRgb(p.knownWavelength);
-          return (
-            <div
-              key={i}
-              className="pointer-events-none absolute bottom-0 top-0"
-              style={{ left: `${fOf(p.pixelPosition) * 100}%` }}
+        {lambdaMax != null ? (
+          // Single thin λmax line (accent, dashed) — same marker style as the chart
+          // above. Map the λmax wavelength back to a pixel via the calibration fit so
+          // it lines up with the strip's pixel-based positioning.
+          <div
+            className="pointer-events-none absolute bottom-0 top-0"
+            style={{ left: `${fOf((lambdaMax - intercept) / slope) * 100}%` }}
+          >
+            <div className="h-full border-l border-dashed" style={{ borderColor: "var(--accent-color)" }} />
+            <span
+              className="absolute left-0.5 top-0.5 whitespace-nowrap rounded bg-black/70 px-1 text-[10px]"
+              style={{ color: "var(--accent-color)" }}
             >
-              <div className="h-full border-l-2 border-dashed" style={{ borderColor: color }} />
-              <span
-                className="absolute left-0.5 top-0.5 whitespace-nowrap rounded bg-black/70 px-1 text-[10px]"
-                style={{ color }}
+              λmax {Math.round(lambdaMax)}
+            </span>
+          </div>
+        ) : (
+          peaks.map((p, i) => {
+            const color = wavelengthToRgb(p.knownWavelength);
+            return (
+              <div
+                key={i}
+                className="pointer-events-none absolute bottom-0 top-0"
+                style={{ left: `${fOf(p.pixelPosition) * 100}%` }}
               >
-                {p.knownWavelength}
-              </span>
-            </div>
-          );
-        })}
+                <div className="h-full border-l-2 border-dashed" style={{ borderColor: color }} />
+                <span
+                  className="absolute left-0.5 top-0.5 whitespace-nowrap rounded bg-black/70 px-1 text-[10px]"
+                  style={{ color }}
+                >
+                  {p.knownWavelength}
+                </span>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Wavelength axis: short λ (blue) on the left, long λ (red) on the right. */}

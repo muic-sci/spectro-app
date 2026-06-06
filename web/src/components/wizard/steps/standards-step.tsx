@@ -136,13 +136,18 @@ export function StandardsStep({
                       slope={calibration.slope}
                       intercept={calibration.intercept}
                       orientation={orientation}
+                      // Laser/fluorescence mode: mark λmax (matching the chart's marker)
+                      // instead of the fixed R/G/B calibration lines.
+                      lambdaMax={isFluor ? lambdaMax : null}
                       bare
                     />
                   </div>
                 ))}
                 <p className="mt-1 text-center text-xs text-t4">
-                  Each captured standard strip, blue (short λ) → red (long λ). Coloured lines mark the
-                  calibration wavelengths (nm).
+                  Each captured standard strip, blue (short λ) → red (long λ).{" "}
+                  {isFluor
+                    ? "The accent line marks λmax (nm)."
+                    : "Coloured lines mark the calibration wavelengths (nm)."}
                 </p>
               </div>
             )}
