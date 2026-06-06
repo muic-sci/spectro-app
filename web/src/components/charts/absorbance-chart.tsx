@@ -155,7 +155,7 @@ export function AbsorbanceChart({
               x={lambdaMax}
               stroke={lambdaMaxColor}
               strokeDasharray="4 2"
-              label={{ value: `λmax ${Math.round(lambdaMax)}`, position: "top", fill: lambdaMaxColor, fontSize: 10 }}
+              label={{ value: `λmax ${lambdaMax.toFixed(1)}`, position: "top", fill: lambdaMaxColor, fontSize: 10 }}
             />
           )}
           {series.map((s) => (
