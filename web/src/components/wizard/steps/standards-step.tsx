@@ -61,10 +61,9 @@ export function StandardsStep({
   const enough = standards.length >= 2;
   const unit = standards[0]?.unit;
 
-  // λmax marker colour: amber while auto-derived, accent once the user pins it
-  // (by dragging a strip line or via the numeric control).
+  // λmax is a manual override when set (else auto-derived) — drives the marker
+  // colour (amber auto / accent manual) inside the spectra card.
   const lambdaMaxManual = lambdaMaxOverride != null;
-  const lambdaMaxColor = lambdaMaxManual ? "var(--accent-color)" : "var(--warn)";
 
   // Standards with a computed spectrum, in chart order — the colour index is
   // shared by the overlay line and its strip label below.
@@ -138,7 +137,7 @@ export function StandardsStep({
             experimentId={experimentId}
             series={series}
             lambdaMax={lambdaMax}
-            lambdaMaxColor={lambdaMaxColor}
+            isManual={lambdaMaxManual}
             signalAxis={t.signalAxis}
             calibration={calibration}
             stripDomain={stripDomain}

@@ -32,7 +32,7 @@ export function SignalSpectraCard({
   experimentId,
   series,
   lambdaMax,
-  lambdaMaxColor,
+  isManual,
   signalAxis,
   calibration,
   stripDomain,
@@ -45,7 +45,8 @@ export function SignalSpectraCard({
   series: AbsorbanceSeries[];
   /** Committed λmax (from the server). */
   lambdaMax: number;
-  lambdaMaxColor: string;
+  /** True when λmax is a manual override — drives the marker colour. */
+  isManual: boolean;
   signalAxis: string;
   calibration: Calibration | null;
   stripDomain: { minX: number; maxX: number } | null;
@@ -56,6 +57,9 @@ export function SignalSpectraCard({
 }) {
   const router = useRouter();
   const [, startCommit] = useTransition();
+
+  // λmax marker colour: amber while auto-derived, accent once the user pins it.
+  const lambdaMaxColor = isManual ? "var(--accent-color)" : "var(--warn)";
 
   // Optimistic λmax while dragging; cleared once the committed prop catches up
   // after refresh (adjust during render rather than in an effect).
@@ -87,6 +91,7 @@ export function SignalSpectraCard({
           experimentId={experimentId}
           lambdaMax={lambdaMax}
           isFluor={isFluor}
+          isManual={isManual}
           bare
         />
       </div>

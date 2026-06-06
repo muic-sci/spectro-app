@@ -24,11 +24,14 @@ export function LambdaMaxControl({
   experimentId,
   lambdaMax,
   isFluor,
+  isManual,
   bare = false,
 }: {
   experimentId: string;
   lambdaMax: number;
   isFluor: boolean;
+  /** True when λmax is a manual override (vs auto-derived). Styles the Auto button. */
+  isManual: boolean;
   /** Drop the card chrome + help text so it can sit inside another card's header. */
   bare?: boolean;
 }) {
@@ -36,16 +39,35 @@ export function LambdaMaxControl({
   const [value, setValue] = useState(() => String(Math.round(lambdaMax * 10) / 10));
   const [pending, startTransition] = useTransition();
 
-  function run(reset: boolean) {
+  // Commit the typed value — fired on blur / Enter (no explicit "Set" button).
+  // Skip invalid input (the field re-inits on the refreshed remount) and no-op
+  // when unchanged so we don't round-trip the server on every focus change.
+  function commit() {
+    const v = Number(value);
+    if (!Number.isFinite(v) || v <= 0 || Math.abs(v - lambdaMax) < 1e-6) return;
     const fd = new FormData();
     fd.append("experimentId", experimentId);
-    if (reset) fd.append("reset", "1");
-    else fd.append("lambdaMax", value);
+    fd.append("lambdaMax", String(v));
     startTransition(async () => {
       await setLambdaMaxAction(fd);
       router.refresh();
     });
   }
+
+  function reset() {
+    if (!isManual) return; // already auto-derived — nothing to revert
+    const fd = new FormData();
+    fd.append("experimentId", experimentId);
+    fd.append("reset", "1");
+    startTransition(async () => {
+      await setLambdaMaxAction(fd);
+      router.refresh();
+    });
+  }
+
+  // Auto button echoes the λmax line: its auto colour (amber) when λmax is
+  // auto-derived, greyed when the user has set a manual value.
+  const autoColor = isManual ? "var(--t4)" : "var(--warn)";
 
   return (
     <div
@@ -60,14 +82,24 @@ export function LambdaMaxControl({
           step="0.5"
           min={0}
           value={value}
+          disabled={pending}
           onChange={(e) => setValue(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
           className="w-28 rounded-md border border-line bg-panel-2 px-2.5 py-2 text-sm text-t1 outline-none focus:border-accent"
         />
       </label>
-      <Button variant="secondary" isDisabled={pending} onClick={() => run(false)}>
-        Set λmax
-      </Button>
-      <Button variant="ghost" isDisabled={pending} onClick={() => run(true)}>
+      <Button
+        variant="ghost"
+        isDisabled={pending}
+        onClick={reset}
+        style={{ color: autoColor, borderColor: autoColor }}
+      >
         Auto
       </Button>
       {!bare && (
