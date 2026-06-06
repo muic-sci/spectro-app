@@ -36,6 +36,7 @@ export function StandardsStep({
   pending,
   roi,
   orientation,
+  lambdaMaxOverride,
 }: {
   experimentId: string;
   mode: ExperimentMode;
@@ -52,12 +53,19 @@ export function StandardsStep({
   pending: CaptureRequest | null;
   roi: Rect | null;
   orientation: "horizontal" | "vertical";
+  /** The user's manual λmax override (null = auto-derived). Drives the marker colour. */
+  lambdaMaxOverride: number | null;
 }) {
   const t = experimentTerms(mode);
   const isFluor = mode === "fluorescence";
   const { standards, calibration, curve, lambdaMax } = derived;
   const enough = standards.length >= 2;
   const unit = standards[0]?.unit;
+
+  // λmax marker colour: amber while auto-derived, accent once the user pins it
+  // (by dragging a strip line or via the numeric control).
+  const lambdaMaxManual = lambdaMaxOverride != null;
+  const lambdaMaxColor = lambdaMaxManual ? "var(--accent-color)" : "var(--warn)";
 
   // Standards with a computed spectrum, in chart order — the colour index is
   // shared by the overlay line and its strip label below.
@@ -116,7 +124,12 @@ export function StandardsStep({
 
           <div className="rounded-lg border border-line bg-panel p-4">
             <h3 className="mb-2 text-sm font-semibold text-t2">{t.signal} spectra</h3>
-            <AbsorbanceChart series={series} lambdaMax={lambdaMax} yLabel={t.signalAxis} />
+            <AbsorbanceChart
+              series={series}
+              lambdaMax={lambdaMax}
+              yLabel={t.signalAxis}
+              lambdaMaxColor={lambdaMaxColor}
+            />
             {calibration && stripDomain && strips.length > 0 && (
               <div className="mt-2 flex flex-col gap-3">
                 {strips.map(({ s, color }) => (
@@ -137,17 +150,26 @@ export function StandardsStep({
                       intercept={calibration.intercept}
                       orientation={orientation}
                       // Laser/fluorescence mode: mark λmax (matching the chart's marker)
-                      // instead of the fixed R/G/B calibration lines.
+                      // instead of the fixed R/G/B calibration lines, and make it draggable.
                       lambdaMax={isFluor ? lambdaMax : null}
+                      lambdaMaxColor={lambdaMaxColor}
+                      experimentId={isFluor ? experimentId : undefined}
                       bare
                     />
                   </div>
                 ))}
                 <p className="mt-1 text-center text-xs text-t4">
                   Each captured standard strip, blue (short λ) → red (long λ).{" "}
-                  {isFluor
-                    ? "The accent line marks λmax (nm)."
-                    : "Coloured lines mark the calibration wavelengths (nm)."}
+                  {isFluor ? (
+                    <>
+                      Drag the λmax line to set it manually —{" "}
+                      <span style={{ color: "var(--warn)" }}>amber = auto-detected</span>,{" "}
+                      <span style={{ color: "var(--accent-color)" }}>cyan = manually set</span> (use{" "}
+                      <em>Auto</em> above to revert).
+                    </>
+                  ) : (
+                    "Coloured lines mark the calibration wavelengths (nm)."
+                  )}
                 </p>
               </div>
             )}

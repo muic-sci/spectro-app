@@ -179,6 +179,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
             pending={pending}
             roi={roi}
             orientation={experiment!.orientation}
+            lambdaMaxOverride={experiment!.lambdaMax}
           />
         );
       case "unknown":

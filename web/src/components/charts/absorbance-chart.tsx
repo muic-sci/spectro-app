@@ -30,12 +30,15 @@ export function AbsorbanceChart({
   lambdaMax,
   height = 280,
   yLabel = "absorbance",
+  lambdaMaxColor = "var(--accent-color)",
 }: {
   series: AbsorbanceSeries[];
   lambdaMax?: number | null;
   height?: number;
   /** Y-axis label — "absorbance" (default) or e.g. "emission intensity". */
   yLabel?: string;
+  /** λmax marker colour — caller uses it to distinguish auto vs manual λmax. */
+  lambdaMaxColor?: string;
 }) {
   // Merge by index onto a shared wavelength x (series[0] sets the axis).
   const base = series[0]?.points ?? [];
@@ -79,9 +82,9 @@ export function AbsorbanceChart({
           {lambdaMax != null && (
             <ReferenceLine
               x={lambdaMax}
-              stroke="var(--accent-color)"
+              stroke={lambdaMaxColor}
               strokeDasharray="4 2"
-              label={{ value: `λmax ${Math.round(lambdaMax)}`, position: "top", fill: "var(--accent-color)", fontSize: 10 }}
+              label={{ value: `λmax ${Math.round(lambdaMax)}`, position: "top", fill: lambdaMaxColor, fontSize: 10 }}
             />
           )}
           {series.map((s) => (
