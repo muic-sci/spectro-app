@@ -162,7 +162,10 @@ export function AlignedLampStrip({
             className="pointer-events-none absolute bottom-0 top-0"
             style={{ left: `${fOf((lambdaMax - intercept) / slope) * 100}%` }}
           >
-            <div className="h-full border-l border-dashed" style={{ borderColor: lambdaMaxColor }} />
+            <div
+              className="h-full border-l border-dashed"
+              style={{ borderColor: lambdaMaxColor, opacity: 0.6 }}
+            />
           </div>
         ) : (
           peaks.map((p, i) => {
