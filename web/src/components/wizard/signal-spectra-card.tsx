@@ -99,28 +99,32 @@ export function SignalSpectraCard({
         onLambdaCommit={commit}
       />
       {calibration && stripDomain && strips.length > 0 && (
-        <div className="mt-2 flex flex-col gap-3">
+        <div className="mt-2 flex flex-col gap-1">
           {strips.map((s) => (
-            <div key={s.id}>
-              <div className="mb-1 flex items-center gap-1.5 pl-[50px] text-xs text-t3">
-                <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
-                {s.concentration} {s.unit}
-              </div>
-              <AlignedLampStrip
-                imageUrl={s.croppedUrl}
-                peaks={calibration.peaks}
-                minX={stripDomain.minX}
-                maxX={stripDomain.maxX}
-                slope={calibration.slope}
-                intercept={calibration.intercept}
-                orientation={orientation}
-                lambdaMax={isFluor ? shown : null}
-                lambdaMaxColor={lambdaMaxColor}
-                bandHeight={32}
-                showWavelengthAxis={false}
-                bare
-              />
-            </div>
+            <AlignedLampStrip
+              key={s.id}
+              imageUrl={s.croppedUrl}
+              peaks={calibration.peaks}
+              minX={stripDomain.minX}
+              maxX={stripDomain.maxX}
+              slope={calibration.slope}
+              intercept={calibration.intercept}
+              orientation={orientation}
+              lambdaMax={isFluor ? shown : null}
+              lambdaMaxColor={lambdaMaxColor}
+              bandHeight={32}
+              showWavelengthAxis={false}
+              leadingLabel={
+                <span className="flex items-center gap-1 text-[10px] leading-tight text-t3">
+                  <span
+                    className="inline-block h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: s.color }}
+                  />
+                  {s.concentration} {s.unit}
+                </span>
+              }
+              bare
+            />
           ))}
           <p className="mt-1 text-center text-xs text-t4">
             Each captured standard strip, blue (short λ) → red (long λ).{" "}

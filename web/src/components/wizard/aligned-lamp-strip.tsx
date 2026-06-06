@@ -41,6 +41,7 @@ export function AlignedLampStrip({
   lambdaMaxColor = "var(--accent-color)",
   bandHeight = DEFAULT_BAND_H,
   showWavelengthAxis = true,
+  leadingLabel = null,
 }: {
   imageUrl: string;
   peaks: Peak[];
@@ -66,6 +67,8 @@ export function AlignedLampStrip({
   bandHeight?: number;
   /** Show the blue/red nm boundary labels under the band (default true). */
   showWavelengthAxis?: boolean;
+  /** Optional label rendered in the left gutter (the PAD_LEFT area), centred on the band. */
+  leadingLabel?: React.ReactNode;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -152,7 +155,15 @@ export function AlignedLampStrip({
   }, [img, bandW, ascending, vertical, bandHeight]);
 
   const band = (
-    <div style={{ paddingLeft: PAD_LEFT, paddingRight: PAD_RIGHT }}>
+    <div className="relative" style={{ paddingLeft: PAD_LEFT, paddingRight: PAD_RIGHT }}>
+      {leadingLabel != null && (
+        <div
+          className="absolute left-0 top-0 flex items-center overflow-hidden pr-1"
+          style={{ width: PAD_LEFT, height: bandHeight }}
+        >
+          {leadingLabel}
+        </div>
+      )}
       <div ref={wrapRef} className="relative">
         <canvas
           ref={canvasRef}
