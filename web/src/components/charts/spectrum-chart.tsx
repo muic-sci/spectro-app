@@ -50,7 +50,9 @@ export function SpectrumChart({
 }) {
   return (
     <div style={{ width: "100%", height }}>
-      <ResponsiveContainer>
+      {/* initialDimension keeps the first (pre-measure) render's height > 0 so
+          Recharts doesn't warn about a -1 size; width is still auto-measured. */}
+      <ResponsiveContainer initialDimension={{ width: 0, height }}>
         <LineChart data={points} margin={{ top: 14, right: 18, bottom: 22, left: 4 }}>
           <CartesianGrid stroke="var(--line-soft)" strokeDasharray="3 3" />
           <XAxis
