@@ -32,8 +32,7 @@ export function UnknownStep({
   orientation: "horizontal" | "vertical";
 }) {
   const t = experimentTerms(mode);
-  const { curve, lambdaMax, unknowns, standards } = derived;
-  const unit = standards[0]?.unit;
+  const { curve, lambdaMax, unknowns, standards, unit } = derived;
 
   if (!curve) {
     return (

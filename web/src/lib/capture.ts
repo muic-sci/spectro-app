@@ -59,7 +59,6 @@ async function storeCapture(opts: {
   bytes: Buffer;
   computed: ComputedCapture;
   concentration?: number;
-  unit?: string;
   /** For role "laser": which known wavelength (nm) this capture is for. */
   laserWavelength?: number;
 }): Promise<CaptureResult> {
@@ -115,7 +114,6 @@ async function storeCapture(opts: {
       data: {
         experimentId,
         concentration: opts.concentration ?? 0,
-        unit: opts.unit ?? "",
         imageId: image.id,
       },
     });
@@ -142,7 +140,6 @@ export async function persistClientCapture(opts: {
   calibration?: Calibration;
   cropBytes?: Buffer;
   concentration?: number;
-  unit?: string;
   laserWavelength?: number;
 }): Promise<CaptureResult> {
   const result = await storeCapture({
@@ -156,7 +153,6 @@ export async function persistClientCapture(opts: {
       cropBytes: opts.cropBytes,
     },
     concentration: opts.concentration,
-    unit: opts.unit,
     laserWavelength: opts.laserWavelength,
   });
   await persistDerived(opts.experimentId);
@@ -176,7 +172,6 @@ export async function processCapture(opts: {
   bytes: Buffer;
   vertical?: boolean;
   concentration?: number;
-  unit?: string;
 }): Promise<CaptureResult> {
   const raster = await decodeImage(opts.bytes);
   const roi = parseRoi(opts.roi) ?? DEFAULT_ROI;
@@ -195,7 +190,6 @@ export async function processCapture(opts: {
     bytes: opts.bytes,
     computed: { profile, saturation, calibration },
     concentration: opts.concentration,
-    unit: opts.unit,
   });
   await persistDerived(opts.experimentId);
   return result;

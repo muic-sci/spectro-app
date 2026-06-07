@@ -25,10 +25,11 @@ const calibration = { slope: 1, intercept: 400, rSquared: 1, peaks: [] };
 function input(over: Partial<AnalysisInput> = {}): AnalysisInput {
   return {
     calibration,
+    unit: "µM",
     images: [{ role: "blank", intensityProfile: profile(0) }],
     standards: [
-      { id: "s5", concentration: 5, unit: "mg/L", image: { url: "/u/5", intensityProfile: profile(140) } },
-      { id: "s2", concentration: 2, unit: "mg/L", image: { url: "/u/2", intensityProfile: profile(80) } },
+      { id: "s5", concentration: 5, image: { url: "/u/5", intensityProfile: profile(140) } },
+      { id: "s2", concentration: 2, image: { url: "/u/2", intensityProfile: profile(80) } },
     ],
     unknowns: [],
     ...over,
@@ -91,10 +92,11 @@ describe("deriveAnalysis (fluorescence)", () => {
     return {
       mode: "fluorescence",
       calibration,
+      unit: "%",
       images: [{ role: "blank", intensityProfile: emission(0) }],
       standards: [
-        { id: "s5", concentration: 5, unit: "nM", image: { url: "/u/5", intensityProfile: emission(150) } },
-        { id: "s2", concentration: 2, unit: "nM", image: { url: "/u/2", intensityProfile: emission(60) } },
+        { id: "s5", concentration: 5, image: { url: "/u/5", intensityProfile: emission(150) } },
+        { id: "s2", concentration: 2, image: { url: "/u/2", intensityProfile: emission(60) } },
       ],
       unknowns: [{ id: "u1", image: { url: "/u/u1", intensityProfile: emission(90) } }],
       ...over,

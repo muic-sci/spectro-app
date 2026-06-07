@@ -70,6 +70,8 @@ export function createExperiment(input: {
   name: string;
   mode: ExperimentMode;
   lightType: ReferenceLight;
+  /** Experiment-global concentration unit ("µM" | "mL" | "%"). */
+  unit: string;
   /** For lightType "laser": the user-entered wavelengths (nm), red→green→blue. */
   laserWavelengths?: number[];
 }) {
@@ -79,6 +81,7 @@ export function createExperiment(input: {
       name: input.name,
       mode: input.mode,
       lightType: input.lightType,
+      unit: input.unit,
       laserWavelengths:
         input.lightType === "laser" && input.laserWavelengths?.length
           ? input.laserWavelengths

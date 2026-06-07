@@ -76,6 +76,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
 
   const derived = deriveAnalysis({
     mode: experiment.mode,
+    unit: experiment.unit,
     calibration: experiment.calibration,
     lambdaMaxOverride: experiment.lambdaMax,
     images: experiment.images,
@@ -91,8 +92,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   // Cropped-to-ROI image URL (exactly what was analysed); ?v= busts on ROI change.
   const version = experiment.updatedAt.getTime();
   const cropped = (url: string) => `${url}/cropped?v=${version}`;
-  const unit = derived.standards[0]?.unit;
-  const { calibration, curve, lambdaMax } = derived;
+  const { calibration, curve, lambdaMax, unit } = derived;
   const t = experimentTerms(experiment.mode);
   const isFluor = experiment.mode === "fluorescence";
   const isLaser = experiment.lightType === "laser";

@@ -86,10 +86,8 @@ export async function persistCaptureForm(formData: FormData, userId: string): Pr
   }
 
   let concentration: number | undefined;
-  let unit: string | undefined;
   if (role === "standard") {
     concentration = Number(formData.get("concentration"));
-    unit = String(formData.get("unit") ?? "").trim() || undefined;
     if (!Number.isFinite(concentration) || concentration <= 0) {
       return { error: "Enter the standard's concentration first." };
     }
@@ -142,7 +140,6 @@ export async function persistCaptureForm(formData: FormData, userId: string): Pr
       calibration,
       cropBytes,
       concentration,
-      unit,
       laserWavelength,
     });
     const saturatedPct = saturation.fraction * 100;

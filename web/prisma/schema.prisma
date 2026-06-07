@@ -105,6 +105,10 @@ model Experiment {
   mode      ExperimentMode @default(beerLambert)
   lightType ReferenceLight @default(fluorescent)
 
+  // Concentration unit used throughout the experiment (chosen once at setup):
+  // "µM", "mL", or "%". Standards/unknowns share it — there is no per-standard unit.
+  unit String @default("µM")
+
   // For lightType == laser: the user-entered known wavelengths (nm), e.g.
   // [650, 532, 405] (red, green, blue order). Null for the fluorescent lamp.
   laserWavelengths Json?
@@ -115,7 +119,7 @@ model Experiment {
   joinToken        String?   @unique
   joinTokenExpires DateTime?
   /// CaptureRequest that drives the phone, e.g.
-  /// { type: 'standard', conc: 5, unit: 'mg/L', standardId: '...' }. Null when idle.
+  /// { role: 'standard', concentration: 5, label: '...' }. Null when idle.
   pendingCapture   Json?
 
   // ROI in image coordinates: { left, top, width, height }. Null → full-frame
@@ -179,7 +183,6 @@ model Standard {
   experiment   Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
 
   concentration Float
-  unit          String
 
   imageId String?        @unique
   image   SpectralImage? @relation(fields: [imageId], references: [id], onDelete: SetNull)

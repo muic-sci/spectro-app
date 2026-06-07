@@ -20,8 +20,7 @@ export function ResultsStep({
   derived: DerivedAnalysis;
 }) {
   const t = experimentTerms(mode);
-  const { calibration, curve, lambdaMax, standards, unknowns } = derived;
-  const unit = standards[0]?.unit;
+  const { calibration, curve, lambdaMax, standards, unknowns, unit } = derived;
 
   const curvePoints = standards
     .filter((s) => s.absorbanceAtLambdaMax != null)

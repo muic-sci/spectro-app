@@ -44,7 +44,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       bytes,
       vertical: experiment.orientation === "vertical",
       concentration: pending.concentration,
-      unit: pending.unit,
     });
     await prisma.experiment.update({
       where: { id },

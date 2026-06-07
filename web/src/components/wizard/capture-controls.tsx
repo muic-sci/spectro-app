@@ -38,6 +38,7 @@ export function CaptureControls({
   phoneOnline = false,
   pending = null,
   needsConcentration = false,
+  unit,
   multiple = false,
   roi = null,
   orientation = "horizontal",
@@ -49,6 +50,8 @@ export function CaptureControls({
   phoneOnline?: boolean;
   pending?: CaptureRequest | null;
   needsConcentration?: boolean;
+  /** Experiment-global concentration unit, shown beside the concentration field. */
+  unit?: string;
   /** Allow picking several photos at once — each is uploaded as its own capture. */
   multiple?: boolean;
   /** Current ROI (image px) so the browser extracts the same region the server stores. */
@@ -61,7 +64,6 @@ export function CaptureControls({
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [concentration, setConcentration] = useState("");
-  const [unit, setUnit] = useState("mg/L");
   const [files, setFiles] = useState<File[]>([]);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<CaptureState | null>(null);
@@ -75,7 +77,6 @@ export function CaptureControls({
     fd.append("role", role);
     if (needsConcentration) {
       fd.append("concentration", concentration);
-      fd.append("unit", unit);
     }
     if (role === "laser" && laserWavelength != null) {
       fd.append("laserWavelength", String(laserWavelength));
@@ -131,30 +132,20 @@ export function CaptureControls({
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-line bg-panel p-4">
       {needsConcentration && (
-        <div className="flex gap-3">
-          <label className="flex flex-1 flex-col gap-1">
-            <span className="text-xs uppercase tracking-wide text-t3">Concentration</span>
-            <input
-              type="number"
-              step="any"
-              min={0}
-              value={concentration}
-              onChange={(e) => setConcentration(e.target.value)}
-              placeholder="e.g. 5"
-              className="rounded-md border border-line bg-panel-2 px-2.5 py-2 text-sm text-t1 outline-none focus:border-accent"
-            />
-          </label>
-          <label className="flex w-28 flex-col gap-1">
-            <span className="text-xs uppercase tracking-wide text-t3">Unit</span>
-            <input
-              type="text"
-              value={unit}
-              maxLength={12}
-              onChange={(e) => setUnit(e.target.value)}
-              className="rounded-md border border-line bg-panel-2 px-2.5 py-2 text-sm text-t1 outline-none focus:border-accent"
-            />
-          </label>
-        </div>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs uppercase tracking-wide text-t3">
+            Concentration{unit ? ` (${unit})` : ""}
+          </span>
+          <input
+            type="number"
+            step="any"
+            min={0}
+            value={concentration}
+            onChange={(e) => setConcentration(e.target.value)}
+            placeholder="e.g. 5"
+            className="rounded-md border border-line bg-panel-2 px-2.5 py-2 text-sm text-t1 outline-none focus:border-accent"
+          />
+        </label>
       )}
 
       {phoneOnline && (

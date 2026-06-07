@@ -35,7 +35,6 @@ interface ImageRow {
 interface StandardRow {
   id: string;
   concentration: number;
-  unit: string;
   image: { url: string; intensityProfile: unknown } | null;
 }
 interface UnknownRow {
@@ -45,6 +44,8 @@ interface UnknownRow {
 export interface AnalysisInput {
   /** Experiment mode — selects absorbance vs fluorescence signal. Defaults to Beer-Lambert. */
   mode?: ExperimentMode;
+  /** Experiment-global concentration unit, applied to every standard/unknown. */
+  unit?: string;
   calibration: unknown;
   lambdaMaxOverride?: number | null;
   images: ImageRow[];
@@ -75,6 +76,8 @@ export interface DerivedAnalysis {
   blankProfile: DataPoint[] | null;
   calibration: Calibration | null;
   lambdaMax: number | null;
+  /** Experiment-global concentration unit (echoed from the input). */
+  unit: string;
   standards: StandardAnalysis[];
   curve: CalibrationCurve | null;
   unknowns: UnknownAnalysis[];
@@ -82,6 +85,7 @@ export interface DerivedAnalysis {
 
 export function deriveAnalysis(input: AnalysisInput): DerivedAnalysis {
   const mode = signalMode(input.mode);
+  const unit = input.unit ?? "";
   const calibration = parseCalibration(input.calibration);
   const blankProfile = parseProfile(
     input.images.find((im) => im.role === "blank")?.intensityProfile,
@@ -121,7 +125,7 @@ export function deriveAnalysis(input: AnalysisInput): DerivedAnalysis {
     return {
       id: s.id,
       concentration: s.concentration,
-      unit: s.unit,
+      unit,
       imageUrl: s.image?.url ?? null,
       spectrum: spectrum ?? null,
       absorbanceAtLambdaMax: a,
@@ -162,5 +166,5 @@ export function deriveAnalysis(input: AnalysisInput): DerivedAnalysis {
     };
   });
 
-  return { blankProfile, calibration, lambdaMax, standards, curve, unknowns };
+  return { blankProfile, calibration, lambdaMax, unit, standards, curve, unknowns };
 }

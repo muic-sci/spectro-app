@@ -38,13 +38,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const d = deriveAnalysis({
     mode: experiment.mode,
+    unit: experiment.unit,
     calibration: experiment.calibration,
     lambdaMaxOverride: experiment.lambdaMax,
     images: experiment.images,
     standards: experiment.standards,
     unknowns: experiment.unknowns,
   });
-  const unit = d.standards[0]?.unit ?? "";
+  const unit = d.unit;
 
   const lines: string[] = [];
   lines.push(row("Spectro experiment", experiment.name));

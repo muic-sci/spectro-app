@@ -23,7 +23,6 @@ export interface CaptureRequest {
   label: string;
   /** For standards. */
   concentration?: number;
-  unit?: string;
 }
 
 /** Parse the loosely-typed pendingCapture Json into a CaptureRequest. */
@@ -35,11 +34,25 @@ export function parseCaptureRequest(j: unknown): CaptureRequest | null {
         role: r.role as SpectralImageRole,
         label: r.label,
         concentration: typeof r.concentration === "number" ? r.concentration : undefined,
-        unit: typeof r.unit === "string" ? r.unit : undefined,
       };
     }
   }
   return null;
+}
+
+/**
+ * Concentration units offered at experiment setup. One unit is chosen per
+ * experiment and used for every standard + unknown (no per-capture unit entry).
+ */
+export const CONCENTRATION_UNITS = ["µM", "mL", "%"] as const;
+export type ConcentrationUnit = (typeof CONCENTRATION_UNITS)[number];
+export const DEFAULT_UNIT: ConcentrationUnit = "µM";
+
+/** Coerce arbitrary input to a valid unit, falling back to the default. */
+export function normalizeUnit(value: unknown): ConcentrationUnit {
+  return CONCENTRATION_UNITS.includes(value as ConcentrationUnit)
+    ? (value as ConcentrationUnit)
+    : DEFAULT_UNIT;
 }
 
 export interface ModeMeta {

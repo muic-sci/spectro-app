@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Button } from "@heroui/react";
 import { Icon } from "@/components/ui/primitives";
 import {
+  CONCENTRATION_UNITS,
+  DEFAULT_UNIT,
   EXPERIMENT_MODES,
   LASER_CHANNELS,
   lightForMode,
@@ -98,6 +100,28 @@ export function NewExperimentForm() {
           placeholder="e.g. Blue dye concentration"
           className="rounded-md border border-line bg-panel-2 px-3 py-2.5 text-sm text-t1 outline-none placeholder:text-t4 focus:border-accent"
         />
+      </section>
+
+      {/* Concentration unit — global to the experiment (used for every standard). */}
+      <section className="flex flex-col gap-2">
+        <label htmlFor="unit" className="text-xs font-semibold uppercase tracking-wide text-t3">
+          Concentration unit
+        </label>
+        <select
+          id="unit"
+          name="unit"
+          defaultValue={DEFAULT_UNIT}
+          className="w-40 rounded-md border border-line bg-panel-2 px-3 py-2.5 text-sm text-t1 outline-none focus:border-accent"
+        >
+          {CONCENTRATION_UNITS.map((u) => (
+            <option key={u} value={u}>
+              {u}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-t3">
+          Used for every standard and the unknown — you won&apos;t re-enter it each time.
+        </p>
       </section>
 
       {/* Mode */}

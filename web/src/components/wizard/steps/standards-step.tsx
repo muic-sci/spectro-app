@@ -57,9 +57,8 @@ export function StandardsStep({
 }) {
   const t = experimentTerms(mode);
   const isFluor = mode === "fluorescence";
-  const { standards, calibration, curve, lambdaMax } = derived;
+  const { standards, calibration, curve, lambdaMax, unit } = derived;
   const enough = standards.length >= 2;
-  const unit = standards[0]?.unit;
 
   // λmax is a manual override when set (else auto-derived) — drives the marker
   // colour (amber auto / accent manual) inside the spectra card.
@@ -122,6 +121,7 @@ export function StandardsStep({
           role="standard"
           cta="Capture standard"
           needsConcentration
+          unit={unit}
           phoneOnline={phoneOnline}
           pending={pending}
           roi={roi}

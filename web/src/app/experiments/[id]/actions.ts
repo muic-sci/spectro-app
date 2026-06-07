@@ -118,15 +118,16 @@ export async function requestCaptureAction(formData: FormData) {
   let unit: string | undefined;
   if (role === "standard") {
     concentration = Number(formData.get("concentration"));
-    unit = String(formData.get("unit") ?? "").trim() || undefined;
     if (!Number.isFinite(concentration) || concentration <= 0) return;
+    // The unit is the experiment-global one — only needed for the phone's label.
+    const exp = await prisma.experiment.findFirst({ where: { id, userId }, select: { unit: true } });
+    unit = exp?.unit;
   }
 
   const request: CaptureRequest = {
     role,
     label: captureLabel(role, concentration, unit),
     concentration,
-    unit,
   };
   await prisma.experiment.updateMany({
     where: { id, userId },

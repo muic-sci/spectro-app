@@ -52,6 +52,7 @@ export default async function WizardPage({ params }: { params: Promise<{ id: str
 
   const derived = deriveAnalysis({
     mode: experiment.mode,
+    unit: experiment.unit,
     calibration: experiment.calibration,
     lambdaMaxOverride: experiment.lambdaMax,
     images: experiment.images,

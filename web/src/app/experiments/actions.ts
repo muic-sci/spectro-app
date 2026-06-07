@@ -9,7 +9,7 @@ import {
   deleteExperiment,
   regenerateJoinToken,
 } from "@/lib/experiments";
-import { EXPERIMENT_MODES, LASER_CHANNELS, lightForMode } from "@/lib/experiment-meta";
+import { EXPERIMENT_MODES, LASER_CHANNELS, lightForMode, normalizeUnit } from "@/lib/experiment-meta";
 import { SpectralConstants } from "@/lib/analysis";
 import type { ExperimentMode } from "@/generated/prisma/enums";
 
@@ -48,6 +48,9 @@ export async function createExperimentAction(
   // no longer a separate form field — derive it from the chosen mode.
   const lightType = lightForMode(mode);
 
+  // Concentration unit is global to the experiment, chosen once here.
+  const unit = normalizeUnit(formData.get("unit"));
+
   let laserWavelengths: number[] | undefined;
   if (lightType === "laser") {
     const { visibleMin, visibleMax } = SpectralConstants;
@@ -61,7 +64,7 @@ export async function createExperimentAction(
     laserWavelengths = parsed;
   }
 
-  const experiment = await createExperiment({ userId, name, mode, lightType, laserWavelengths });
+  const experiment = await createExperiment({ userId, name, mode, lightType, unit, laserWavelengths });
   redirect(`/experiments/${experiment.id}/pair`);
 }
 
