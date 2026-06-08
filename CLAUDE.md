@@ -165,7 +165,6 @@ There is no database, no `.env` to configure, and no auth. Data lives in the bro
 Push a `vX.Y.Z` tag → `.gitlab-ci.yml` builds `web/Dockerfile` (context `web`) and pushes to the GitLab registry → HMAC webhook → the server's `docker/cron-deploy.sh` (cron) pulls the new tag and runs `docker compose up -d`. The image is a **multi-stage static build**: `node` builds the export, then **nginx** (`web/nginx.conf`) serves `out/` on **:80** behind nginx-proxy. **No database, no migrations, no persistent volume.**
 - **`docker/docker-compose.yml`** runs a single `app` service (the static image) with `VIRTUAL_HOST`/`VIRTUAL_PORT=80`/`LETSENCRYPT_HOST` for nginx-proxy + acme-companion. The `docker/` folder is rsync'd to the server; `.env` is server-managed (see `docker/.env.example`).
 - **Server setup:** DNS A-record; nginx-proxy + acme-companion on the `nginx-proxy` network; a deploy dir holding the synced compose + `.env` (`SPECTRO_APP_IMAGE` / `VIRTUAL_HOST` / `LETSENCRYPT_HOST` / `PROXY_CONTAINER`); `docker login` to the registry for cron pulls; `cron-deploy.sh` in crontab; CI vars `DEPLOY_WEBHOOK_SECRET` + `DEPLOY_WEBHOOK_URL`. Nothing to back up (no server-side data).
-- **`docker/deploy.sh`** is a manual SSH fallback (build → save → load → compose up).
 
 ## Git Commit Convention
 All commits follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>[scope]: <short description>` + optional bullet body.
