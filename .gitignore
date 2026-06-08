@@ -72,3 +72,6 @@ app.*.map.json
 # Server-side bind-mount data dirs (default paths when compose runs from docker/)
 docker/pgdata/
 docker/uploads/
+
+# Local-only reference dataset (kept on disk, not tracked)
+materials/
