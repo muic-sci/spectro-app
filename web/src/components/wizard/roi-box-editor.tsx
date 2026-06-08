@@ -8,20 +8,18 @@
  *
  * Everything re-extracts IN THE BROWSER: on a Save / orientation change we decode
  * every stored image, re-extract its profile + ROI crop and recompute the
- * calibration (analysis-client.reextractAll), then POST the results to
- * persistReextractAction (DB + crop storage only). The server does no image
- * work, so the horizontal/vertical toggle is instant regardless of server load.
- * The "region used for analysis" preview is drawn on a <canvas> from the loaded
- * image — no round-trip to a server crop.
+ * calibration (analysis-client.reextractAll), then write the results straight to
+ * the local store (store.persistReextract). No server, no upload — the
+ * horizontal/vertical toggle is instant. The "region used for analysis" preview
+ * is drawn on a <canvas> from the loaded image.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
 import { Icon } from "@/components/ui/primitives";
 import { reextractAll, suggestOrientation } from "@/lib/analysis-client";
-import { packProfile } from "@/lib/profile-codec";
+import { persistReextract } from "@/lib/store/experiments";
+import { useWizardReload } from "@/components/wizard/wizard-context";
 import type { OrientationScore } from "@/lib/analysis";
-import { uploadReextract } from "@/lib/capture-upload";
 
 interface Rect {
   left: number;
@@ -52,7 +50,7 @@ export function RoiBoxEditor({
   /** "laser" → recompute calibration from the laser captures, not the composite. */
   lightType?: string;
 }) {
-  const router = useRouter();
+  const reload = useWizardReload();
   const wrapRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const previewRef = useRef<HTMLCanvasElement>(null);
@@ -265,27 +263,15 @@ export function RoiBoxEditor({
         lightType,
       });
 
-      const fd = new FormData();
-      fd.append("experimentId", experimentId);
-      fd.append("orientation", nextOrientation);
-      if (roi == null) {
-        fd.append("mode", "full");
-      } else {
-        fd.append("mode", "custom");
-        fd.append("left", String(roi.left));
-        fd.append("top", String(roi.top));
-        fd.append("width", String(roi.width));
-        fd.append("height", String(roi.height));
-      }
-      fd.append(
-        "profiles",
-        JSON.stringify(profiles.map((p) => ({ imageId: p.imageId, profile: packProfile(p.points) }))),
-      );
-      if (calibration) fd.append("calibration", JSON.stringify(calibration));
-      for (const c of crops) fd.append(`crop_${c.imageId}`, c.blob, `${c.imageId}.jpg`);
-
-      const res = await uploadReextract(experimentId, fd);
-      if (res.ok) router.refresh();
+      await persistReextract({
+        experimentId,
+        roi,
+        orientation: nextOrientation,
+        profiles,
+        crops: crops.map((c) => ({ imageId: c.imageId, blob: c.blob })),
+        calibration,
+      });
+      await reload();
     } catch {
       // leave the UI as-is; the student can retry
     } finally {

@@ -3,37 +3,28 @@
 /**
  * Imperative delete button for a wizard resource (standard / unknown).
  *
- * Calls the server action directly inside a transition (then router.refresh())
- * instead of a declarative `<form action={…}>`. A self-removing form is a
- * classic trigger for React 19's "fiber.reset is not a function" — the
- * automatic post-action form reset hits a fiber the action just unmounted —
- * which on chart-bearing steps cascades into a Recharts "removeChild of null"
- * crash. The imperative path sidesteps the form machinery entirely (same
- * reasoning as LambdaMaxControl).
+ * Runs the async `onDelete` (a store mutation) inside a transition, then reloads
+ * the wizard. Imperative rather than a declarative `<form action>` to sidestep
+ * React 19's post-action form-reset path, which on chart-bearing steps could
+ * cascade into a Recharts "removeChild of null" crash.
  */
 import type { ReactNode } from "react";
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useWizardReload } from "@/components/wizard/wizard-context";
 
 export function DeleteButton({
-  action,
-  experimentId,
-  idName,
-  idValue,
+  onDelete,
   ariaLabel,
   children = "Delete",
   className = "text-xs text-t4 hover:text-danger disabled:opacity-50",
 }: {
-  action: (formData: FormData) => Promise<void>;
-  experimentId: string;
-  /** The form field name carrying the resource id (e.g. "standardId"). */
-  idName: string;
-  idValue: string;
+  /** The store mutation to run (e.g. () => deleteStandard(expId, id)). */
+  onDelete: () => Promise<void>;
   ariaLabel?: string;
   children?: ReactNode;
   className?: string;
 }) {
-  const router = useRouter();
+  const reload = useWizardReload();
   const [pending, startTransition] = useTransition();
 
   return (
@@ -42,15 +33,12 @@ export function DeleteButton({
       disabled={pending}
       aria-label={ariaLabel}
       className={className}
-      onClick={() => {
-        const fd = new FormData();
-        fd.append("experimentId", experimentId);
-        fd.append(idName, idValue);
+      onClick={() =>
         startTransition(async () => {
-          await action(fd);
-          router.refresh();
-        });
-      }}
+          await onDelete();
+          await reload();
+        })
+      }
     >
       {pending ? "Deleting…" : children}
     </button>

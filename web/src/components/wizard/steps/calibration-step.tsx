@@ -9,7 +9,6 @@ import { DetectedPeaksTable } from "@/components/wizard/detected-peaks-table";
 import { CalibrationFitChart } from "@/components/charts/calibration-fit-chart";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
 import type { Calibration, DataPoint, Rect } from "@/lib/analysis";
-import type { CaptureRequest } from "@/lib/experiment-meta";
 
 /** Plain-language verdict on the fit quality (web-ux-brief.md §5 L3.2). */
 function fitVerdict(rSquared: number): { tone: "ok" | "warn" | "danger"; text: string } {
@@ -24,10 +23,8 @@ export function CalibrationStep({
   calibration,
   profile,
   imageUrl,
-  version,
+  croppedImageUrl,
   orientation,
-  phoneOnline,
-  pending,
   roi,
   lightType = "fluorescent",
 }: {
@@ -35,10 +32,8 @@ export function CalibrationStep({
   calibration: Calibration | null;
   profile: DataPoint[] | null;
   imageUrl?: string;
-  version: number;
+  croppedImageUrl?: string;
   orientation: "horizontal" | "vertical";
-  phoneOnline: boolean;
-  pending: CaptureRequest | null;
   roi: Rect | null;
   lightType?: string;
 }) {
@@ -59,8 +54,6 @@ export function CalibrationStep({
             experimentId={experimentId}
             role="calibration"
             cta="Capture lamp"
-            phoneOnline={phoneOnline}
-            pending={pending}
             roi={roi}
             orientation={orientation}
           />
@@ -91,7 +84,7 @@ export function CalibrationStep({
       <SpectrumWithStrip
         points={profile}
         calibration={calibration}
-        croppedImageUrl={imageUrl ? `${imageUrl}/cropped?v=${version}` : undefined}
+        croppedImageUrl={croppedImageUrl}
         orientation={orientation}
         caption={
           <>
@@ -159,8 +152,6 @@ export function CalibrationStep({
               experimentId={experimentId}
               role="calibration"
               cta="Re-capture lamp"
-              phoneOnline={phoneOnline}
-              pending={pending}
               roi={roi}
               orientation={orientation}
             />

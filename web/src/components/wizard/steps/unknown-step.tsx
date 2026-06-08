@@ -8,26 +8,22 @@ import { CalibrationCurveChart } from "@/components/charts/calibration-curve-cha
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { DeleteButton } from "@/components/wizard/delete-button";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
-import { deleteUnknownAction } from "@/app/experiments/[id]/actions";
+import { deleteUnknown } from "@/lib/store/experiments";
 import type { DerivedAnalysis } from "@/lib/experiment-analysis";
 import type { Rect } from "@/lib/analysis";
-import { experimentTerms, type CaptureRequest } from "@/lib/experiment-meta";
-import type { ExperimentMode } from "@/generated/prisma/enums";
+import { experimentTerms } from "@/lib/experiment-meta";
+import type { ExperimentMode } from "@/lib/domain-types";
 
 export function UnknownStep({
   experimentId,
   mode,
   derived,
-  phoneOnline,
-  pending,
   roi,
   orientation,
 }: {
   experimentId: string;
   mode: ExperimentMode;
   derived: DerivedAnalysis;
-  phoneOnline: boolean;
-  pending: CaptureRequest | null;
   roi: Rect | null;
   orientation: "horizontal" | "vertical";
 }) {
@@ -66,10 +62,7 @@ export function UnknownStep({
             )}
             <div className="ml-auto">
               <DeleteButton
-                action={deleteUnknownAction}
-                experimentId={experimentId}
-                idName="unknownId"
-                idValue={u.id}
+                onDelete={() => deleteUnknown(experimentId, u.id)}
                 ariaLabel={`Delete unknown #${i + 1}`}
               />
             </div>
@@ -131,8 +124,6 @@ export function UnknownStep({
           role="unknown"
           cta="Capture unknowns"
           multiple
-          phoneOnline={phoneOnline}
-          pending={pending}
           roi={roi}
           orientation={orientation}
         />

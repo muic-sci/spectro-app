@@ -14,8 +14,7 @@ import { CaptureControls } from "@/components/wizard/capture-controls";
 import { RoiBoxEditor } from "@/components/wizard/roi-box-editor";
 import { LaserCaptureStep, type LaserImage } from "@/components/wizard/steps/laser-capture-step";
 import { Icon } from "@/components/ui/primitives";
-import type { CaptureRequest } from "@/lib/experiment-meta";
-import type { ReferenceLight } from "@/generated/prisma/enums";
+import type { ReferenceLight } from "@/lib/domain-types";
 
 export interface Roi {
   left: number;
@@ -32,8 +31,6 @@ export function RoiStep({
   orientation,
   images,
   calibrationImageUrl,
-  phoneOnline,
-  pending,
   lightType,
   laserChannels,
   laserImages,
@@ -44,8 +41,6 @@ export function RoiStep({
   /** Every stored image, so a ROI/orientation change can re-extract them all. */
   images: { id: string; role: string; laserWavelength?: number | null }[];
   calibrationImageUrl: string | null;
-  phoneOnline: boolean;
-  pending: CaptureRequest | null;
   lightType: ReferenceLight;
   /** Laser channels (label + wavelength), in order — laser mode only. */
   laserChannels: { label: string; wavelength: number }[];
@@ -93,8 +88,6 @@ export function RoiStep({
           experimentId={experimentId}
           role="calibration"
           cta="Capture lamp"
-          phoneOnline={phoneOnline}
-          pending={pending}
           roi={roi}
           orientation={orientation}
         />
@@ -137,8 +130,6 @@ export function RoiStep({
               experimentId={experimentId}
               role="calibration"
               cta="Re-capture lamp"
-              phoneOnline={phoneOnline}
-              pending={pending}
               roi={roi}
               orientation={orientation}
             />

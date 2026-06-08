@@ -6,18 +6,17 @@
  * `laser`-role image tagged with its wavelength. Once all three are present, the
  * browser overlays them (max-blend) into a single composite image and fits
  * pixel→λ from each laser's known wavelength — then persists the composite as the
- * `calibration` image the ROI editor + report use. Computed entirely client-side
- * (analysis-client.buildLaserCalibration); the server only stores the result.
+ * `calibration` image the ROI editor + report use. Computed + stored entirely in
+ * the browser (analysis-client.buildLaserCalibration → store.persistCapture).
  */
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, StatusChip } from "@/components/ui/primitives";
 import { buildLaserCalibration } from "@/lib/analysis-client";
-import { packProfile } from "@/lib/profile-codec";
+import { persistCapture } from "@/lib/store/experiments";
+import { useWizardReload } from "@/components/wizard/wizard-context";
 import { captureLog, startTimer } from "@/lib/capture-log";
-import { uploadCapture } from "@/lib/capture-upload";
 import { wavelengthToRgb } from "@/lib/wavelength-color";
 
 interface Rect {
@@ -51,7 +50,7 @@ export function LaserCaptureStep({
   /** Whether the composite (calibration image) already exists. */
   composited: boolean;
 }) {
-  const router = useRouter();
+  const reload = useWizardReload();
   const [, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,19 +75,17 @@ export function LaserCaptureStep({
           vertical: orientation === "vertical",
         });
         timer.mark("built composite (client done)", { points: result.compositeProfile.length });
-        const fd = new FormData();
-        fd.append("experimentId", experimentId);
-        fd.append("role", "calibration");
-        fd.append("file", result.compositeBlob, "composite.jpg");
-        fd.append("crop", result.cropBlob, "crop.jpg");
-        fd.append("profile", JSON.stringify(packProfile(result.compositeProfile)));
-        fd.append("saturation", JSON.stringify(result.saturation));
-        fd.append("calibration", JSON.stringify(result.calibration));
-        timer.mark("POST → /capture (awaiting server)");
-        const res = await uploadCapture(experimentId, fd);
-        timer.mark("POST returned", { ok: res.ok, error: res.error });
-        if (res.error) setError(res.error);
-        else router.refresh();
+        await persistCapture({
+          experimentId,
+          role: "calibration",
+          blob: result.compositeBlob,
+          profile: result.compositeProfile,
+          saturation: result.saturation,
+          calibration: result.calibration,
+          cropBlob: result.cropBlob,
+        });
+        timer.mark("persisted composite");
+        await reload();
       } catch (e) {
         captureLog("combine lasers ERROR", { error: e instanceof Error ? e.message : String(e) });
         setError("Couldn't combine the laser captures — re-shoot one and try again.");

@@ -11,7 +11,7 @@ import type {
   ReferenceLight,
   SpectralImageRole,
   WorkflowStep,
-} from "@/generated/prisma/enums";
+} from "@/lib/domain-types";
 
 /**
  * What the laptop is asking the phone to shoot (stored as Experiment.pendingCapture).

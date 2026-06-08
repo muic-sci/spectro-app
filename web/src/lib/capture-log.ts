@@ -16,7 +16,6 @@ function now(): number {
 }
 
 export function captureLog(msg: string, extra?: Record<string, unknown>): void {
-  // eslint-disable-next-line no-console
   console.log(`${PREFIX} ${msg}`, extra ?? {});
 }
 

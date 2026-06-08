@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
 import { Icon } from "@/components/ui/primitives";
 import {
@@ -11,11 +12,11 @@ import {
   LASER_CHANNELS,
   lightForMode,
   lightMeta,
+  normalizeUnit,
   type ModeMeta,
 } from "@/lib/experiment-meta";
-import { createExperimentAction, type NewExperimentState } from "../actions";
-
-const INITIAL: NewExperimentState = {};
+import { SpectralConstants } from "@/lib/analysis";
+import { createExperiment } from "@/lib/store/experiments";
 
 /** A selectable option card (mode / light). Drives a hidden radio input. */
 function OptionCard({
@@ -68,22 +69,60 @@ function OptionCard({
 }
 
 export function NewExperimentForm() {
-  const [state, action, pending] = useActionState(createExperimentAction, INITIAL);
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [unit, setUnit] = useState<string>(DEFAULT_UNIT);
   const [mode, setMode] = useState<ModeMeta["value"]>(EXPERIMENT_MODES[0].value);
   const [laser, setLaser] = useState<Record<string, string>>(() =>
     Object.fromEntries(LASER_CHANNELS.map((c) => [c.key, String(c.default)])),
   );
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   // The reference light is paired one-to-one with the mode (absorbance →
   // fluorescent lamp, fluorescence → lasers), so this form is a single choice;
-  // the server derives the light from the mode (lightForMode).
+  // the light is derived from the mode (lightForMode).
   const isLaser = lightForMode(mode) === "laser";
   const peaksLabel = isLaser
     ? LASER_CHANNELS.map((c) => laser[c.key] || "?").join(" · ")
     : lightMeta("fluorescent").peaks.join(" · ");
 
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const trimmed = name.trim();
+    if (!trimmed) return setError("Please name your experiment.");
+    if (trimmed.length > 80) return setError("That name is a bit long — keep it under 80 characters.");
+
+    const lightType = lightForMode(mode);
+    let laserWavelengths: number[] | undefined;
+    if (lightType === "laser") {
+      const { visibleMin, visibleMax } = SpectralConstants;
+      const parsed = LASER_CHANNELS.map((c) => Number(laser[c.key]));
+      if (!parsed.every((w) => Number.isFinite(w) && w >= visibleMin && w <= visibleMax)) {
+        return setError(`Enter each laser's wavelength in nm (${visibleMin}–${visibleMax}).`);
+      }
+      laserWavelengths = parsed;
+    }
+
+    setPending(true);
+    try {
+      const exp = await createExperiment({
+        name: trimmed,
+        mode,
+        lightType,
+        unit: normalizeUnit(unit),
+        laserWavelengths,
+      });
+      router.push(`/experiment?id=${exp.id}`);
+    } catch {
+      setPending(false);
+      setError("Couldn't create the experiment — please try again.");
+    }
+  }
+
   return (
-    <form action={action} className="flex flex-col gap-8">
+    <form onSubmit={onSubmit} className="flex flex-col gap-8">
       {/* Name */}
       <section className="flex flex-col gap-2">
         <label htmlFor="name" className="text-xs font-semibold uppercase tracking-wide text-t3">
@@ -96,7 +135,8 @@ export function NewExperimentForm() {
           required
           maxLength={80}
           autoFocus
-          defaultValue={state.values?.name}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Blue dye concentration"
           className="rounded-md border border-line bg-panel-2 px-3 py-2.5 text-sm text-t1 outline-none placeholder:text-t4 focus:border-accent"
         />
@@ -110,7 +150,8 @@ export function NewExperimentForm() {
         <select
           id="unit"
           name="unit"
-          defaultValue={DEFAULT_UNIT}
+          value={unit}
+          onChange={(e) => setUnit(e.target.value)}
           className="w-40 rounded-md border border-line bg-panel-2 px-3 py-2.5 text-sm text-t1 outline-none focus:border-accent"
         >
           {CONCENTRATION_UNITS.map((u) => (
@@ -186,15 +227,15 @@ export function NewExperimentForm() {
         </p>
       </section>
 
-      {state.error && (
+      {error && (
         <p className="flex items-center gap-2 text-sm text-danger" role="alert">
-          <Icon name="warn" size={15} /> {state.error}
+          <Icon name="warn" size={15} /> {error}
         </p>
       )}
 
       <div className="flex items-center gap-3">
         <Button type="submit" variant="primary" isDisabled={pending}>
-          {pending ? "Creating…" : "Continue to pairing"}
+          {pending ? "Creating…" : "Create & start"}
           {!pending && <Icon name="arrowR" size={16} />}
         </Button>
         <Link href="/experiments" className="text-sm text-t3 hover:text-t1">

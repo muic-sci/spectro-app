@@ -10,11 +10,11 @@ import { SignalSpectraCard } from "@/components/wizard/signal-spectra-card";
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { DeleteButton } from "@/components/wizard/delete-button";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
-import { deleteStandardAction } from "@/app/experiments/[id]/actions";
+import { deleteStandard } from "@/lib/store/experiments";
 import type { DerivedAnalysis } from "@/lib/experiment-analysis";
 import type { Rect } from "@/lib/analysis";
-import { experimentTerms, type CaptureRequest } from "@/lib/experiment-meta";
-import type { ExperimentMode } from "@/generated/prisma/enums";
+import { experimentTerms } from "@/lib/experiment-meta";
+import type { ExperimentMode } from "@/lib/domain-types";
 
 // Distinct, dark-theme-legible series colours (low→high concentration).
 const SERIES_COLORS = ["#4453ff", "#1ad6d6", "#38d65a", "#d6d61a", "#ff9a1a", "#ff3b3b"];
@@ -29,10 +29,7 @@ export function StandardsStep({
   experimentId,
   mode,
   derived,
-  version,
   stripDomain,
-  phoneOnline,
-  pending,
   roi,
   orientation,
   lambdaMaxOverride,
@@ -40,16 +37,12 @@ export function StandardsStep({
   experimentId: string;
   mode: ExperimentMode;
   derived: DerivedAnalysis;
-  /** Cache-bust token for the cropped-strip images (experiment.updatedAt). */
-  version: number;
   /**
    * Pixel domain (first/last sample along the dispersion axis) shared by every
    * capture's ROI — taken from the lamp profile so the standard strips align
    * with the calibration peaks. Null when there is no calibration capture yet.
    */
   stripDomain: { minX: number; maxX: number } | null;
-  phoneOnline: boolean;
-  pending: CaptureRequest | null;
   roi: Rect | null;
   orientation: "horizontal" | "vertical";
   /** The user's manual λmax override (null = auto-derived). Drives the marker colour. */
@@ -78,20 +71,14 @@ export function StandardsStep({
   const stripItems = withSpectrum
     .map((s, i) => ({
       id: s.id,
-      imageUrl: s.imageUrl,
-      croppedUrl: `${s.imageUrl}/cropped?v=${version}`,
+      croppedUrl: s.croppedImageUrl,
       concentration: s.concentration,
       unit: s.unit,
       color: SERIES_COLORS[i % SERIES_COLORS.length],
     }))
-    .filter((x) => x.imageUrl)
-    .map(({ id, croppedUrl, concentration, unit, color }) => ({
-      id,
-      croppedUrl,
-      concentration,
-      unit,
-      color,
-    }));
+    .filter((x): x is { id: string; croppedUrl: string; concentration: number; unit: string; color: string } =>
+      !!x.croppedUrl,
+    );
 
   const curvePoints = standards
     .filter((s) => s.absorbanceAtLambdaMax != null)
@@ -122,8 +109,6 @@ export function StandardsStep({
           cta="Capture standard"
           needsConcentration
           unit={unit}
-          phoneOnline={phoneOnline}
-          pending={pending}
           roi={roi}
           orientation={orientation}
         />
@@ -221,10 +206,7 @@ export function StandardsStep({
                   </td>
                   <td className="px-3 py-2 text-right">
                     <DeleteButton
-                      action={deleteStandardAction}
-                      experimentId={experimentId}
-                      idName="standardId"
-                      idValue={s.id}
+                      onDelete={() => deleteStandard(experimentId, s.id)}
                       ariaLabel={`Delete standard ${i + 1}`}
                     />
                   </td>

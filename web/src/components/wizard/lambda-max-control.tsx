@@ -16,9 +16,9 @@
  * CaptureControls).
  */
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
-import { setLambdaMaxAction } from "@/app/experiments/[id]/actions";
+import { setLambdaMax } from "@/lib/store/experiments";
+import { useWizardReload } from "@/components/wizard/wizard-context";
 
 export function LambdaMaxControl({
   experimentId,
@@ -35,33 +35,26 @@ export function LambdaMaxControl({
   /** Drop the card chrome + help text so it can sit inside another card's header. */
   bare?: boolean;
 }) {
-  const router = useRouter();
+  const reload = useWizardReload();
   const [value, setValue] = useState(() => String(Math.round(lambdaMax * 10) / 10));
   const [pending, startTransition] = useTransition();
 
   // Commit the typed value — fired on blur / Enter (no explicit "Set" button).
-  // Skip invalid input (the field re-inits on the refreshed remount) and no-op
-  // when unchanged so we don't round-trip the server on every focus change.
+  // Skip invalid input and no-op when unchanged.
   function commit() {
     const v = Number(value);
     if (!Number.isFinite(v) || v <= 0 || Math.abs(v - lambdaMax) < 1e-6) return;
-    const fd = new FormData();
-    fd.append("experimentId", experimentId);
-    fd.append("lambdaMax", String(v));
     startTransition(async () => {
-      await setLambdaMaxAction(fd);
-      router.refresh();
+      await setLambdaMax(experimentId, Math.round(v * 10) / 10);
+      await reload();
     });
   }
 
   function reset() {
     if (!isManual) return; // already auto-derived — nothing to revert
-    const fd = new FormData();
-    fd.append("experimentId", experimentId);
-    fd.append("reset", "1");
     startTransition(async () => {
-      await setLambdaMaxAction(fd);
-      router.refresh();
+      await setLambdaMax(experimentId, null);
+      await reload();
     });
   }
 

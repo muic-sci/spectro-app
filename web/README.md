@@ -1,105 +1,89 @@
 # Spectro Web
 
-The laptop-side **guide & analysis** app for the Lego Spectrophotometer. The
-phone (the native Flutter app in [`../mobile`](../mobile)) is a focus-locked
-camera; everything else — guidance, ROI, charts, results, export — happens here.
+A **fully static, in-browser** guide & analysis app for the Lego
+Spectrophotometer. You open a static site, upload photos of the spectrum strip,
+and everything — ROI selection, wavelength calibration, absorbance/fluorescence,
+the calibration curve, the report and CSV — runs **entirely in your browser**.
+There is no account, no server and no database; experiments and image binaries
+live in your browser's **IndexedDB**, and nothing is uploaded anywhere.
 
-See the planning docs in [`../docs`](../docs): `web-refactor-plan.md`
-(architecture), `web-ux-brief.md` (screens), and
-`design_handoff_continuous_camera/` (visual system + continuous-capture state
-machine).
+See the planning docs in [`../docs`](../docs) and the project summary in
+[`../CLAUDE.md`](../CLAUDE.md) for the full architecture + science reference.
 
 ## Stack
 
 | Layer | Choice |
 |---|---|
-| Framework | **Next.js 16** (App Router) · **React 19** |
-| UI | **HeroUI v3** components, re-skinned with the design-handoff dark OKLCH tokens (**Tailwind v4**) |
-| Auth | **Auth.js (NextAuth v5)** Credentials provider — email + password (`bcryptjs`), JWT sessions; register + self-service reset |
-| DB | **Prisma 7** + **PostgreSQL** (via the `@prisma/adapter-pg` driver adapter) |
-| Image decode | **sharp** (libvips), server-only |
-| Analysis | **TypeScript port** of the Dart algorithms — `src/lib/analysis` |
-| Charts | Recharts (added; wired in the wizard pass) |
+| Framework | **Next.js 16** (App Router, `output: "export"` → static `out/`) · **React 19** |
+| UI | **HeroUI v3** re-skinned with the design-handoff dark OKLCH tokens (**Tailwind v4**) · **Recharts** |
+| Storage | Browser **IndexedDB** (`src/lib/store`) — experiment JSON + image blobs; export/import to a `.spectro.json` bundle |
+| Image decode | **Browser** (`createImageBitmap` + canvas) — `src/lib/analysis/decode.client.ts` |
+| Analysis | **TypeScript** algorithms in `src/lib/analysis` (run client-side) |
+
+No Prisma/Postgres, no Auth.js, no server actions, no API routes. `sharp` is a
+**devDependency** used only by the Node golden/orientation tests.
 
 ## Getting started
 
 ```bash
-# 1. install
 npm install
-
-# 2. start Postgres + a dev mail inbox (Mailpit)
-docker compose up -d
-
-# 3. configure env
-cp .env.example .env       # then: npx auth secret  → paste into AUTH_SECRET
-
-# 4. create the schema
-npm run prisma:migrate     # or: npm run db:push
-
-# 5. run
-npm run dev                # http://localhost:3000
+npm run dev        # http://localhost:3000 (dev server; the app itself is static)
 ```
 
-Register at `/login` → "Create an account". Password-reset emails (the only
-email the app sends) land in Mailpit at <http://localhost:8025> in development.
+Open the app, click **Start measuring**, create an experiment, and follow the
+wizard. Your experiments persist in this browser; use **Export/Import** on the
+list page to back them up or move them between machines.
 
 ## Scripts
 
-- `npm run dev` / `build` / `start`
+- `npm run dev` — Next dev server
+- `npm run build` — static export → `out/`
+- `npm run preview` — serve the built `out/` locally (`npx serve out`)
 - `npm test` — Vitest (unit + golden-data analysis tests)
 - `npm run lint` — ESLint (flat config)
 - `npm run typecheck` — `tsc --noEmit`
-- `npm run prisma:generate` / `prisma:migrate` / `prisma:studio` / `db:push`
 
 ## The "middle ground" theme
 
-We use **HeroUI v3** for accessible, community-maintained interactive components
-(Button, Card, Input, Modal, Tabs…) and re-skin its semantic CSS variables
-(`--background`, `--surface`, `--accent`, `--default`, `--border`, …) with the
-**design handoff's** dark, low-emission OKLCH palette in
-[`src/app/globals.css`](src/app/globals.css). The signature scientific pieces the
-component library doesn't provide — the spectrum logo mark, the visible-spectrum
-gradient bar, the connection badge, status chips and the big mono readouts — are
-ported as token-styled primitives in
-[`src/components/ui/primitives.tsx`](src/components/ui/primitives.tsx).
-
+**HeroUI v3** provides accessible interactive components; we re-skin its semantic
+CSS variables with the **design handoff's** dark OKLCH palette in
+[`src/app/globals.css`](src/app/globals.css). The signature scientific pieces
+(spectrum logo mark, visible-spectrum bar, status chips, mono readouts) are ported
+primitives in [`src/components/ui/primitives.tsx`](src/components/ui/primitives.tsx).
 Dark mode is an **experimental requirement** (stray screen light contaminates the
-measurement), so the app is dark-only (`.dark` is always on `<html>`).
-
-Browse it all at **`/showcase`**.
+measurement), so the app is dark-only — except the **report**, which has its own
+light/dark toggle and always prints on white. Browse it all at **`/showcase`**.
 
 ## Analysis core (the science)
 
-`src/lib/analysis` is a faithful TypeScript port of the Dart algorithms in
-`../mobile/lib/core`, behind a single module seam so it can later be swapped for
-a Python sidecar (see `web-refactor-plan.md` §5):
+`src/lib/analysis` holds the pure algorithms (no native deps), run in the browser:
 
-- `gamma` (sRGB→linear) · `extractIntensityProfile` (luminance vs max-channel) ·
-  `checkSaturation`
+- `srgbToLinear` · `extractIntensityProfile` (luminance vs max-channel) · `checkSaturation` · `scoreOrientation`
 - `linearRegression` · `movingAverage` · `findLocalMaxima`
-- `detectCalibrationPeaks` / `buildCalibration` (pixel→λ)
-- `computeAbsorbance` (A = −log₁₀(I/I₀)) · λmax · Beer-Lambert curve
+- `calibrateFromLampProfile` / `calibrateFromLaserProfiles` (pixel→λ, collinearity selection, auto-flip)
+- `buildSignalSpectrum` (A = −log₁₀(I/I₀) or F = I − I₀) · λmax · calibration curve · `determineConcentration`
 
-`decodeImage` (sharp) is **server-only** — import it from
-`@/lib/analysis/decode`, not the barrel.
+`analysis-client.ts` orchestrates decode → ROI extract → calibrate → crop in the
+browser; `decode.client.ts` decodes via `createImageBitmap` + canvas. The golden
+test (`test/analysis.golden.test.ts`) decodes the `materials/002` fixture with
+**sharp** (Node-only devDependency) to pin the decoder-robust science.
 
-**Decoder note:** the web port decodes JPEGs with sharp + EXIF auto-orient
-(`.rotate()`), which the Dart `image` package does implicitly. Omitting it
-silently mirrors the spectrum (wavelength axis reversed). sharp and the Dart
-`image` package can still differ at the sub-peak level; the golden test
-(`test/analysis.golden.test.ts`) therefore pins the decoder-robust science
-(λmax, Beer-Lambert linearity, absorbance ordering) tightly and the calibration
-as a structural + snapshot anchor.
+## Storage & data
 
-## Data model
+There is no database. `src/lib/store` is the IndexedDB layer:
 
-`prisma/schema.prisma` holds the Auth.js tables plus the spectro domain — an
-`Experiment` (the shared two-device unit; named to avoid colliding with Auth.js's
-`Session`) owning pairing/step state, the ROI, the calibration, `SpectralImage`s,
-`Standard`s and `Unknown`s. See `web-refactor-plan.md` §7.
+- `db.ts` — IndexedDB wrapper (`experiments` + `blobs` stores)
+- `experiments.ts` — CRUD + capture persistence (`persistCapture`/`persistReextract`/…) + derived-science recompute
+- `blobs.ts` — image binaries + `blob:` object-URL cache
+- `transfer.ts` — export/import a portable `.spectro.json` bundle
+- `export-csv.ts` — build + download the results CSV
+- `use-experiment.ts` — the `useExperiment(id)` React hook the wizard/report use
 
-## What's next (not in this foundation pass)
+Domain types (the old Prisma enums/models) live in `src/lib/domain-types.ts`.
 
-Guided wizard UI (setup → pairing → capture → calibration → blank → standards →
-absorbance review → unknown → results), the SSE realtime channel + capture
-upload route handlers, the ROI editor, charts, and CSV export.
+## Deploy
+
+`npm run build` emits a static `out/` — host it on any static host (or open
+`out/index.html`). The repo ships a Docker image (`Dockerfile` → nginx serving
+`out/`) wired to a tag → CI → webhook → `docker compose up -d` flow; see
+[`../CLAUDE.md`](../CLAUDE.md) and [`../docker`](../docker).

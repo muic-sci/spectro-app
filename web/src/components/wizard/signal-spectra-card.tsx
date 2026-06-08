@@ -6,19 +6,19 @@
  *
  * It owns the **optimistic λmax** while the chart's λmax line is being dragged so
  * BOTH the chart marker and every strip's λmax line move together, live, during
- * the drag — not just after the value is committed. The commit (setLambdaMaxAction
- * + router.refresh) also lives here; the optimistic value is held through the
- * refresh and dropped once the committed prop catches up.
+ * the drag — not just after the value is committed. The commit (store.setLambdaMax
+ * + reload) also lives here; the optimistic value is held through the reload and
+ * dropped once the committed prop catches up.
  *
  * Pass `readOnly` (e.g. in the printable report) to render the same chart + strips
  * with NO λmax control, NO header, and a non-draggable line — a static view.
  */
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { AbsorbanceChart, type AbsorbanceSeries } from "@/components/charts/absorbance-chart";
 import { AlignedLampStrip } from "@/components/wizard/aligned-lamp-strip";
 import { LambdaMaxControl } from "@/components/wizard/lambda-max-control";
-import { setLambdaMaxAction } from "@/app/experiments/[id]/actions";
+import { setLambdaMax } from "@/lib/store/experiments";
+import { useWizardReload } from "@/components/wizard/wizard-context";
 import type { Calibration } from "@/lib/analysis";
 
 export interface SpectraStrip {
@@ -62,7 +62,7 @@ export function SignalSpectraCard({
   /** Static view: no control, no header, non-draggable λmax line (e.g. the report). */
   readOnly?: boolean;
 }) {
-  const router = useRouter();
+  const reload = useWizardReload();
   const [, startCommit] = useTransition();
 
   // λmax marker colour: amber while auto-derived, accent once the user pins it.
@@ -80,13 +80,10 @@ export function SignalSpectraCard({
 
   const commit = (nm: number) => {
     if (!experimentId) return;
-    setLive(nm); // hold the dragged value visible through the refresh
-    const fd = new FormData();
-    fd.append("experimentId", experimentId);
-    fd.append("lambdaMax", String(Math.round(nm * 10) / 10));
+    setLive(nm); // hold the dragged value visible through the reload
     startCommit(async () => {
-      await setLambdaMaxAction(fd);
-      router.refresh();
+      await setLambdaMax(experimentId, Math.round(nm * 10) / 10);
+      await reload();
     });
   };
 

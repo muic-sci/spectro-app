@@ -1,6 +1,7 @@
 # Build context is web/. Keep the image lean and deterministic.
 node_modules
 .next
+out
 storage
 .env
 .env.*

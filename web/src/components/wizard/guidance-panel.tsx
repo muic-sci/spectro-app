@@ -4,7 +4,7 @@
  */
 import { Icon } from "@/components/ui/primitives";
 import { stepGuidance } from "@/lib/experiment-meta";
-import type { ExperimentMode, ReferenceLight, WorkflowStep } from "@/generated/prisma/enums";
+import type { ExperimentMode, ReferenceLight, WorkflowStep } from "@/lib/domain-types";
 
 export function GuidancePanel({
   step,

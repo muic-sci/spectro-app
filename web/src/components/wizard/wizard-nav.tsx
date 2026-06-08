@@ -1,12 +1,17 @@
+"use client";
+
 /**
- * Back / Continue navigation for the wizard shell. Continue is disabled until
- * the step's requirement is met, and says why (web-ux-brief.md §5 L3 nav).
+ * Back / Continue navigation for the wizard shell. Continue is disabled until the
+ * step's requirement is met, and says why. Navigation writes currentStep to the
+ * local store, then reloads the wizard (no server).
  */
+import { useTransition } from "react";
 import { buttonVariants } from "@heroui/react";
 import { Icon } from "@/components/ui/primitives";
 import { nextWizardStep, prevWizardStep, stepShort } from "@/lib/experiment-meta";
-import type { ExperimentMode, WorkflowStep } from "@/generated/prisma/enums";
-import { goToStepAction } from "@/app/experiments/[id]/actions";
+import { goToStep } from "@/lib/store/experiments";
+import { useWizardReload } from "@/components/wizard/wizard-context";
+import type { ExperimentMode, WorkflowStep } from "@/lib/domain-types";
 
 export function WizardNav({
   experimentId,
@@ -21,32 +26,42 @@ export function WizardNav({
   canContinue: boolean;
   continueHint?: string;
 }) {
+  const reload = useWizardReload();
+  const [pending, startTransition] = useTransition();
   const prev = prevWizardStep(step);
   const next = nextWizardStep(step);
+
+  const navigate = (to: WorkflowStep) =>
+    startTransition(async () => {
+      await goToStep(experimentId, to);
+      await reload();
+    });
 
   return (
     <div className="flex items-center justify-between gap-3 border-t border-line-soft pt-4">
       {prev ? (
-        <form action={goToStepAction}>
-          <input type="hidden" name="experimentId" value={experimentId} />
-          <input type="hidden" name="step" value={prev} />
-          <button type="submit" className={buttonVariants({ variant: "ghost" })}>
-            ← Back
-          </button>
-        </form>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => navigate(prev)}
+          className={buttonVariants({ variant: "ghost" })}
+        >
+          ← Back
+        </button>
       ) : (
         <span />
       )}
 
       {next ? (
         canContinue ? (
-          <form action={goToStepAction}>
-            <input type="hidden" name="experimentId" value={experimentId} />
-            <input type="hidden" name="step" value={next} />
-            <button type="submit" className={buttonVariants({ variant: "primary" })}>
-              Continue to {stepShort(next, mode)} <Icon name="arrowR" size={16} />
-            </button>
-          </form>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => navigate(next)}
+            className={buttonVariants({ variant: "primary" })}
+          >
+            Continue to {stepShort(next, mode)} <Icon name="arrowR" size={16} />
+          </button>
         ) : (
           <span
             className={buttonVariants({ variant: "primary" })}

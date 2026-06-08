@@ -1,8 +1,9 @@
 # GitLab CI/CD for spectro-app
-# Builds and pushes the Spectro Web (Next.js) Docker image to the GitLab
-# Container Registry, then triggers deployment via the webhook-with-curl server.
-# The image applies Prisma migrations on boot and serves on :3000; the server
-# compose (docker/) also runs Postgres + a persistent uploads volume.
+# Builds and pushes the Spectro Web Docker image to the GitLab Container
+# Registry, then triggers deployment via the webhook-with-curl server.
+# The image is a fully STATIC site (Next.js `output: export`) served by nginx on
+# :80 — no database, no app server, no migrations. The server compose (docker/)
+# runs just that one static container behind nginx-proxy.
 #
 # Triggered only on tags matching vX.Y.Z (e.g. v1.0.0, v2.10.3).
 #

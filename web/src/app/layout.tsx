@@ -22,7 +22,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Spectro Web",
   description:
-    "The laptop-side guide & analysis for the Lego Spectrophotometer — your phone is the camera.",
+    "Guide & analysis for the Lego Spectrophotometer — Beer-Lambert quantitation that runs entirely in your browser.",
 };
 
 export default function RootLayout({

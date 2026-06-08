@@ -21,7 +21,7 @@ import type {
   SignalMode,
 } from "@/lib/analysis";
 import { parseCalibration, parseProfile } from "@/lib/experiment-json";
-import type { ExperimentMode } from "@/generated/prisma/enums";
+import type { ExperimentMode } from "@/lib/domain-types";
 
 /** Map the stored experiment mode to the core's signal mode. */
 export function signalMode(mode: ExperimentMode | undefined): SignalMode {
@@ -35,11 +35,11 @@ interface ImageRow {
 interface StandardRow {
   id: string;
   concentration: number;
-  image: { url: string; intensityProfile: unknown } | null;
+  image?: { url: string; croppedUrl?: string; intensityProfile: unknown } | null;
 }
 interface UnknownRow {
   id: string;
-  image: { url: string; intensityProfile: unknown } | null;
+  image?: { url: string; croppedUrl?: string; intensityProfile: unknown } | null;
 }
 export interface AnalysisInput {
   /** Experiment mode — selects absorbance vs fluorescence signal. Defaults to Beer-Lambert. */
@@ -58,6 +58,8 @@ export interface StandardAnalysis {
   concentration: number;
   unit: string;
   imageUrl: string | null;
+  /** ROI-crop object URL for the strip view (null when none). */
+  croppedImageUrl: string | null;
   spectrum: AbsorbanceSpectrum | null;
   absorbanceAtLambdaMax: number | null;
 }
@@ -65,6 +67,8 @@ export interface StandardAnalysis {
 export interface UnknownAnalysis {
   id: string;
   imageUrl: string | null;
+  /** ROI-crop object URL for the strip view (null when none). */
+  croppedImageUrl: string | null;
   spectrum: AbsorbanceSpectrum | null;
   absorbanceAtLambdaMax: number | null;
   concentration: number | null;
@@ -127,6 +131,7 @@ export function deriveAnalysis(input: AnalysisInput): DerivedAnalysis {
       concentration: s.concentration,
       unit,
       imageUrl: s.image?.url ?? null,
+      croppedImageUrl: s.image?.croppedUrl ?? null,
       spectrum: spectrum ?? null,
       absorbanceAtLambdaMax: a,
     };
@@ -159,6 +164,7 @@ export function deriveAnalysis(input: AnalysisInput): DerivedAnalysis {
     return {
       id: u.id,
       imageUrl: u.image?.url ?? null,
+      croppedImageUrl: u.image?.croppedUrl ?? null,
       spectrum,
       absorbanceAtLambdaMax: a,
       concentration,

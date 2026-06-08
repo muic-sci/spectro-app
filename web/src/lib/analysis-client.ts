@@ -16,6 +16,7 @@
  * from client components.
  */
 import { decodeImageBrowser } from "./analysis/decode.client";
+import { getBlob } from "@/lib/store/blobs";
 import { startTimer } from "@/lib/capture-log";
 import {
   extractIntensityProfile,
@@ -37,12 +38,10 @@ import type {
 
 /** Decoded rasters cached by source URL, so a ROI tweak re-extracts without re-fetching/re-decoding. */
 const rasterCache = new Map<string, RasterImage>();
+/** Decoded rasters cached by stored image id (the IndexedDB blob store). */
+const rasterById = new Map<string, RasterImage>();
 
-export function imageUrlFor(experimentId: string, imageId: string): string {
-  return `/api/experiments/${experimentId}/images/${imageId}`;
-}
-
-/** Fetch an already-stored image and decode it (cached). */
+/** Fetch an already-stored image (by URL — e.g. a blob: object URL) and decode it (cached). */
 export async function decodeFromUrl(url: string): Promise<RasterImage> {
   const cached = rasterCache.get(url);
   if (cached) return cached;
@@ -51,6 +50,22 @@ export async function decodeFromUrl(url: string): Promise<RasterImage> {
   const raster = await decodeImageBrowser(await res.blob());
   rasterCache.set(url, raster);
   return raster;
+}
+
+/** Read a stored image's bytes from the local blob store and decode it (cached). */
+export async function decodeImageId(imageId: string): Promise<RasterImage> {
+  const cached = rasterById.get(imageId);
+  if (cached) return cached;
+  const blob = await getBlob(imageId);
+  if (!blob) throw new Error(`Image ${imageId} not found in local store`);
+  const raster = await decodeImageBrowser(blob);
+  rasterById.set(imageId, raster);
+  return raster;
+}
+
+/** Drop a stored image's cached raster (e.g. after it's deleted/replaced). */
+export function invalidateRaster(imageId: string): void {
+  rasterById.delete(imageId);
 }
 
 function canvasToJpegBlob(canvas: HTMLCanvasElement): Promise<Blob> {
@@ -218,9 +233,7 @@ export async function buildLaserCalibration(opts: {
 }): Promise<LaserCompositeResult> {
   const timer = startTimer("buildLaserCalibration", { lasers: opts.lasers.length });
   const roi = opts.roi ?? DEFAULT_ROI;
-  const rasters = await Promise.all(
-    opts.lasers.map((l) => decodeFromUrl(imageUrlFor(opts.experimentId, l.id))),
-  );
+  const rasters = await Promise.all(opts.lasers.map((l) => decodeImageId(l.id)));
   timer.mark("decoded all", { sizes: rasters.map((r) => `${r.width}x${r.height}`).join(",") });
   const channels = opts.lasers.map((l, i) => ({
     wavelength: l.wavelength,
@@ -267,7 +280,7 @@ export async function reextractAll(opts: {
   const roi = opts.roi ?? DEFAULT_ROI;
   const results = await Promise.all(
     opts.images.map(async (img) => {
-      const raster = await decodeFromUrl(imageUrlFor(opts.experimentId, img.id));
+      const raster = await decodeImageId(img.id);
       // Lamp composite + laser lines both want equal colour sensitivity.
       const useMaxChannel = img.role === "calibration" || img.role === "laser";
       const points = extractIntensityProfile(raster, roi, {

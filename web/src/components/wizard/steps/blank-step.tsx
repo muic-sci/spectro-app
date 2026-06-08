@@ -9,18 +9,16 @@ import { SpectrumWithStrip } from "@/components/wizard/spectrum-with-strip";
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, StatusChip } from "@/components/ui/primitives";
 import type { Calibration, DataPoint, Rect } from "@/lib/analysis";
-import { experimentTerms, type CaptureRequest } from "@/lib/experiment-meta";
-import type { ExperimentMode } from "@/generated/prisma/enums";
+import { experimentTerms } from "@/lib/experiment-meta";
+import type { ExperimentMode } from "@/lib/domain-types";
 
 export function BlankStep({
   experimentId,
   mode,
   profile,
   imageUrl,
+  croppedImageUrl,
   calibration,
-  version,
-  phoneOnline,
-  pending,
   roi,
   orientation,
 }: {
@@ -28,11 +26,9 @@ export function BlankStep({
   mode: ExperimentMode;
   profile: DataPoint[] | null;
   imageUrl?: string;
+  croppedImageUrl?: string;
   /** Calibration (from the lamp step) gives the wavelength axis + blue/red flip. */
   calibration: Calibration | null;
-  version: number;
-  phoneOnline: boolean;
-  pending: CaptureRequest | null;
   roi: Rect | null;
   orientation: "horizontal" | "vertical";
 }) {
@@ -55,8 +51,6 @@ export function BlankStep({
           experimentId={experimentId}
           role="blank"
           cta={`Capture ${noun}`}
-          phoneOnline={phoneOnline}
-          pending={pending}
           roi={roi}
           orientation={orientation}
         />
@@ -79,7 +73,7 @@ export function BlankStep({
         <SpectrumWithStrip
           points={profile}
           calibration={calibration}
-          croppedImageUrl={imageUrl ? `${imageUrl}/cropped?v=${version}` : undefined}
+          croppedImageUrl={croppedImageUrl}
           orientation={orientation}
           caption={<>{stripCaption}</>}
         />
@@ -109,8 +103,6 @@ export function BlankStep({
             experimentId={experimentId}
             role="blank"
             cta={`Re-capture ${noun}`}
-            phoneOnline={phoneOnline}
-            pending={pending}
             roi={roi}
             orientation={orientation}
           />

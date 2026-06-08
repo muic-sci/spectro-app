@@ -1,10 +1,10 @@
 /**
- * Analysis core — public surface (the swappable seam, web-refactor-plan.md §5).
+ * Analysis core — public surface (the swappable seam).
  *
- * Everything the API/UI needs imports from here. The pure functions (math,
- * image, calibration, absorbance) have no native dependencies and are unit
- * tested directly. `decode` (sharp) is server-only and exported separately so
- * client bundles never pull in the native binary.
+ * Everything the UI needs imports from here. The pure functions (math, image,
+ * calibration, absorbance) have no native dependencies and are unit tested
+ * directly. The static app decodes in the browser via "./decode.client"
+ * (decodeImageBrowser); the pure core here is decoder-agnostic.
  */
 export * from "./types";
 export { SpectralConstants } from "./constants";
@@ -38,6 +38,3 @@ export {
   determineConcentration,
 } from "./absorbance";
 export type { SignalMode } from "./absorbance";
-
-// NOTE: decodeImage is intentionally NOT re-exported here — import it from
-// "@/lib/analysis/decode" in server-only code (route handlers / server actions).

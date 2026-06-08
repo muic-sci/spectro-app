@@ -1,22 +1,29 @@
+"use client";
+
 /**
  * L3.7 — Results & export. The summary of everything measured, plus a CSV
- * download for the lab report.
+ * download (built in the browser from the derived analysis) for the lab report.
  */
 import Link from "next/link";
-import { buttonVariants } from "@heroui/react";
+import { Button, buttonVariants } from "@heroui/react";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
 import { Icon, Readout } from "@/components/ui/primitives";
 import type { DerivedAnalysis } from "@/lib/experiment-analysis";
 import { experimentTerms } from "@/lib/experiment-meta";
-import type { ExperimentMode } from "@/generated/prisma/enums";
+import { downloadResultsCsv } from "@/lib/store/export-csv";
+import type { ExperimentMode, ReferenceLight } from "@/lib/domain-types";
 
 export function ResultsStep({
   experimentId,
+  name,
   mode,
+  lightType,
   derived,
 }: {
   experimentId: string;
+  name: string;
   mode: ExperimentMode;
+  lightType: ReferenceLight;
   derived: DerivedAnalysis;
 }) {
   const t = experimentTerms(mode);
@@ -115,16 +122,15 @@ export function ResultsStep({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Link href={`/experiments/${experimentId}/report`} className={buttonVariants({ variant: "primary" })}>
+        <Link href={`/report?id=${experimentId}`} className={buttonVariants({ variant: "primary" })}>
           <Icon name="flask" size={16} /> Open full report
         </Link>
-        <a
-          href={`/api/experiments/${experimentId}/export.csv`}
-          className={buttonVariants({ variant: "secondary" })}
-          download
+        <Button
+          variant="secondary"
+          onClick={() => downloadResultsCsv({ name, mode, lightType }, derived)}
         >
           Export CSV
-        </a>
+        </Button>
         <span className="text-xs text-t4">
           The report has every strip, plot and result — ready to print or save as PDF.
         </span>
