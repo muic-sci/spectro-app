@@ -106,7 +106,7 @@ model Experiment {
   lightType ReferenceLight @default(fluorescent)
 
   // Concentration unit used throughout the experiment (chosen once at setup):
-  // "µM", "mL", or "%". Standards/unknowns share it — there is no per-standard unit.
+  // "µM", "mg/L", or "%". Standards/unknowns share it — there is no per-standard unit.
   unit String @default("µM")
 
   // For lightType == laser: the user-entered known wavelengths (nm), e.g.

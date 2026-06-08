@@ -44,7 +44,7 @@ export function parseCaptureRequest(j: unknown): CaptureRequest | null {
  * Concentration units offered at experiment setup. One unit is chosen per
  * experiment and used for every standard + unknown (no per-capture unit entry).
  */
-export const CONCENTRATION_UNITS = ["µM", "mL", "%"] as const;
+export const CONCENTRATION_UNITS = ["µM", "mg/L", "%"] as const;
 export type ConcentrationUnit = (typeof CONCENTRATION_UNITS)[number];
 export const DEFAULT_UNIT: ConcentrationUnit = "µM";
 

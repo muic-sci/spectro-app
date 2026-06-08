@@ -70,7 +70,7 @@ export function createExperiment(input: {
   name: string;
   mode: ExperimentMode;
   lightType: ReferenceLight;
-  /** Experiment-global concentration unit ("µM" | "mL" | "%"). */
+  /** Experiment-global concentration unit ("µM" | "mg/L" | "%"). */
   unit: string;
   /** For lightType "laser": the user-entered wavelengths (nm), red→green→blue. */
   laserWavelengths?: number[];
