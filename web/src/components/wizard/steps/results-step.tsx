@@ -132,7 +132,9 @@ export function ResultsStep({
           Export CSV
         </Button>
         <span className="text-xs text-t4">
-          The report has every strip, plot and result — ready to print or save as PDF.
+          The CSV includes the full {mode === "fluorescence" ? "emission" : "absorbance"} spectrum
+          (signal vs wavelength) of every standard and sample, ready to re-plot elsewhere. The
+          report has every strip, plot and result — ready to print or save as PDF.
         </span>
       </div>
     </div>

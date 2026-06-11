@@ -61,6 +61,39 @@ export function buildResultsCsv(
       ),
     ),
   );
+
+  // Full signal spectra (signal vs wavelength) for every standard + unknown, as
+  // a wide table — one wavelength column then one column per sample — so a
+  // student can re-plot the raw curves in Excel/Origin/etc. Spectra share the
+  // same ROI + calibration, so they sit on the same wavelength grid (aligned by
+  // index); the longest spectrum supplies the wavelength axis.
+  const signalLabel = isFluor ? "fluorescence" : "absorbance";
+  const spectra: { name: string; spectrum: typeof d.standards[number]["spectrum"] }[] = [
+    ...d.standards.map((s, i) => ({ name: `standard_${i + 1}_${signalLabel}`, spectrum: s.spectrum })),
+    ...d.unknowns.map((u, i) => ({ name: `unknown_${i + 1}_${signalLabel}`, spectrum: u.spectrum })),
+  ].filter((c) => c.spectrum && c.spectrum.points.length > 0);
+
+  if (spectra.length > 0) {
+    // Reference wavelength axis = the spectrum with the most points.
+    const ref = spectra.reduce((a, b) =>
+      (b.spectrum!.points.length > a.spectrum!.points.length ? b : a),
+    ).spectrum!.points;
+    lines.push("");
+    lines.push(row("spectra", `${signalLabel} vs wavelength`));
+    lines.push(row("wavelength_nm", ...spectra.map((c) => c.name)));
+    for (let i = 0; i < ref.length; i++) {
+      lines.push(
+        row(
+          +ref[i].x.toFixed(2),
+          ...spectra.map((c) => {
+            const p = c.spectrum!.points[i];
+            return p ? +p.y.toFixed(6) : "";
+          }),
+        ),
+      );
+    }
+  }
+
   return lines.join("\n") + "\n";
 }
 
