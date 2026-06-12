@@ -26,6 +26,17 @@ const ICONS: Record<string, string | string[]> = {
   wave: "M3 12c2-4 4-4 6 0s4 4 6 0 4-4 6 0",
   lock: ["M6 11h12v9H6z", "M8.5 11V8a3.5 3.5 0 017 0v3"],
   spark: "M12 3l1.8 5.4L19 10l-5.2 1.6L12 17l-1.8-5.4L5 10l5.2-1.6z",
+  download: ["M12 4v10M8 11l4 4 4-4", "M5 19h14"],
+  upload: ["M12 20V10M8 13l4-4 4 4", "M5 5h14"],
+  fileExport: [
+    "M11 3H6a2 2 0 00-2 2v14a2 2 0 002 2h7a2 2 0 002-2V7",
+    "M11 3l4 4h-4z",
+    "M10 13h11",
+    "M18 10l3 3-3 3",
+  ],
+  pencil: ["M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z", "M14 6l3 3"],
+  trash: ["M4 7h16", "M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2", "M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13", "M10 11v6M14 11v6"],
+  x: "M6 6l12 12M18 6L6 18",
 };
 
 export type IconName = keyof typeof ICONS | string;
@@ -35,11 +46,13 @@ export function Icon({
   size = 18,
   stroke = 2,
   style,
+  className,
 }: {
   name: IconName;
   size?: number;
   stroke?: number;
   style?: CSSProperties;
+  className?: string;
 }) {
   const d = ICONS[name] ?? ICONS.dot ?? "M12 12h.01";
   const paths = Array.isArray(d) ? d : [d];
@@ -54,12 +67,38 @@ export function Icon({
       strokeLinecap="round"
       strokeLinejoin="round"
       style={style}
+      className={className}
       aria-hidden
     >
       {paths.map((p, i) => (
         <path key={i} d={p} />
       ))}
     </svg>
+  );
+}
+
+// ── tooltip ─────────────────────────────────────────────────────────────────
+/**
+ * A lightweight CSS hover/focus tooltip. Wraps a single interactive child (kept
+ * a real <button> so keyboard + a11y are intact) and reveals `label` above it.
+ */
+export function Tooltip({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <span className="group/tip relative inline-flex">
+      {children}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-md border border-line bg-raised px-2 py-1 text-xs font-medium text-t1 opacity-0 shadow-lg transition-all duration-150 group-hover/tip:translate-y-0 group-hover/tip:opacity-100 group-focus-within/tip:translate-y-0 group-focus-within/tip:opacity-100"
+      >
+        {label}
+      </span>
+    </span>
   );
 }
 
