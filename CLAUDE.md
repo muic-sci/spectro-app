@@ -48,6 +48,7 @@ Experiment
  ├── mode (beerLambert|fluorescence), lightType (fluorescent|laser)
  ├── unit (global concentration unit: "µM" | "mg/L" | "%"), laserWavelengths ([r,g,b] | null)
  ├── currentStep (WorkflowStep), roi (Rect | null), orientation (horizontal|vertical)
+ ├── lineariseGamma (bool; undo sRGB gamma before averaging — toggle on the ROI step; missing → true)
  ├── calibration (Calibration | null), lambdaMax (number | null, user override)
  ├── calibrationCurve (CalibrationCurve | null)  — derived, written by applyDerived
  ├── images[]    (SpectralImage: id, role, intensityProfile {points}, laserWavelength, capturedAt;
@@ -100,7 +101,7 @@ Smartphone cameras store JPEGs in the **sRGB colour space**, gamma-encoded (γ �
 if C_norm ≤ 0.04045:  C_linear = C_norm / 12.92
 else:                  C_linear = ((C_norm + 0.055) / 1.055)^2.4
 ```
-On by default (`lineariseGamma: true`).
+On by default. It is now a **persisted, experiment-global setting** (`Experiment.lineariseGamma: boolean`) the student can toggle on the **Camera & ROI** step (`RoiBoxEditor` switch). Flipping it re-extracts **every** stored capture with the new value (via `reextractAll` → `persistReextract`, which stores the flag) so an experiment never mixes gamma settings; new captures read the current value from the store (`CaptureControls`/`LaserCaptureStep` → `analyzeCaptureBlob`/`buildLaserCalibration`). **Backward compatible:** a missing field (legacy IndexedDB records or bundles exported before this setting existed) is treated as `true` at import (`transfer.ts`), on read (`readExperiment`), and at every consumer, so old data re-analyses identically.
 
 ### Intensity extraction method: luminance vs max-channel
 `extractIntensityProfile` supports two methods via `useMaxChannel`:

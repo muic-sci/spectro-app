@@ -1,6 +1,6 @@
 {
   "name": "spectro-web",
-  "version": "3.0.0",
+  "version": "3.3.0",
   "private": true,
   "description": "Spectro Web — a fully static, in-browser guide & analysis app for the Lego Spectrophotometer (Beer-Lambert / fluorescence quantitation).",
   "engines": {

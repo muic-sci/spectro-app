@@ -81,6 +81,10 @@ export async function readExperiment(id: string): Promise<Experiment | undefined
   const exp = await getExperiment(id);
   if (!exp) return undefined;
 
+  // Legacy records (pre-gamma-toggle) have no lineariseGamma field — the old code
+  // always linearised, so default missing → true for backward compatibility.
+  exp.lineariseGamma = exp.lineariseGamma ?? true;
+
   // Resolve object URLs for every full image + its ROI crop.
   await Promise.all(
     exp.images.map(async (im) => {
@@ -121,6 +125,7 @@ export async function createExperiment(input: {
     currentStep: "cameraRoiSetup",
     roi: null,
     orientation: "horizontal",
+    lineariseGamma: true,
     calibration: null,
     lambdaMax: null,
     calibrationCurve: null,
@@ -247,6 +252,8 @@ export async function persistReextract(opts: {
   experimentId: string;
   roi: Experiment["roi"];
   orientation: SpectrumOrientation;
+  /** New gamma-correction setting (the re-extraction was run with this value). */
+  lineariseGamma?: boolean;
   profiles: { imageId: string; points: DataPoint[] }[];
   crops?: { imageId: string; blob: Blob }[];
   calibration?: Calibration;
@@ -256,6 +263,7 @@ export async function persistReextract(opts: {
 
   exp.roi = opts.roi;
   exp.orientation = opts.orientation;
+  if (typeof opts.lineariseGamma === "boolean") exp.lineariseGamma = opts.lineariseGamma;
 
   const byId = new Map(exp.images.map((im) => [im.id, im]));
   for (const p of opts.profiles) {

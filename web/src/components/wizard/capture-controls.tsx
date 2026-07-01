@@ -11,7 +11,7 @@ import { useState } from "react";
 import { Button } from "@heroui/react";
 import { Icon, StatusChip } from "@/components/ui/primitives";
 import { analyzeCaptureBlob } from "@/lib/analysis-client";
-import { persistCapture } from "@/lib/store/experiments";
+import { getExperiment, persistCapture } from "@/lib/store/experiments";
 import { useWizardReload } from "@/components/wizard/wizard-context";
 import { captureLog, startTimer } from "@/lib/capture-log";
 
@@ -62,6 +62,8 @@ export function CaptureControls({
   async function upload() {
     setBusy(true);
     setResult(null);
+    // Experiment-global gamma setting (missing on legacy records → linearise).
+    const lineariseGamma = (await getExperiment(experimentId))?.lineariseGamma ?? true;
     const queue = files;
     let ok = 0;
     let firstError: string | undefined;
@@ -76,6 +78,7 @@ export function CaptureControls({
           role,
           roi,
           vertical: orientation === "vertical",
+          lineariseGamma,
         });
         timer.mark("analyzed (client compute done)", { points: computed.profile.length });
         const res = await persistCapture({

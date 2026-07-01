@@ -126,6 +126,7 @@ function WizardPageInner() {
             experimentId={experiment!.id}
             roi={roi}
             orientation={experiment!.orientation}
+            lineariseGamma={experiment!.lineariseGamma ?? true}
             images={imageList}
             calibrationImageUrl={calImage?.url || null}
             lightType={experiment!.lightType}

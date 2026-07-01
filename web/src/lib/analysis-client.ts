@@ -182,7 +182,7 @@ export interface ClientCapture {
 /** Decode + analyse a freshly captured photo in the browser. */
 export async function analyzeCaptureBlob(
   blob: Blob,
-  opts: { role: string; roi: Rect | null; vertical: boolean },
+  opts: { role: string; roi: Rect | null; vertical: boolean; lineariseGamma?: boolean },
 ): Promise<ClientCapture> {
   const timer = startTimer(`analyze[${opts.role}]`, { blobSize: blob.size });
   const raster = await decodeImageBrowser(blob);
@@ -193,6 +193,7 @@ export async function analyzeCaptureBlob(
   const profile = extractIntensityProfile(raster, roi, {
     useMaxChannel,
     vertical: opts.vertical,
+    lineariseGamma: opts.lineariseGamma ?? true,
   });
   timer.mark("extracted", { points: profile.length });
   const saturation = checkSaturation(raster, roi);
@@ -230,14 +231,16 @@ export async function buildLaserCalibration(opts: {
   lasers: { id: string; wavelength: number }[];
   roi: Rect | null;
   vertical: boolean;
+  lineariseGamma?: boolean;
 }): Promise<LaserCompositeResult> {
   const timer = startTimer("buildLaserCalibration", { lasers: opts.lasers.length });
   const roi = opts.roi ?? DEFAULT_ROI;
+  const lineariseGamma = opts.lineariseGamma ?? true;
   const rasters = await Promise.all(opts.lasers.map((l) => decodeImageId(l.id)));
   timer.mark("decoded all", { sizes: rasters.map((r) => `${r.width}x${r.height}`).join(",") });
   const channels = opts.lasers.map((l, i) => ({
     wavelength: l.wavelength,
-    profile: extractIntensityProfile(rasters[i], roi, { useMaxChannel: true, vertical: opts.vertical }),
+    profile: extractIntensityProfile(rasters[i], roi, { useMaxChannel: true, vertical: opts.vertical, lineariseGamma }),
   }));
   const calibration = calibrateFromLaserProfiles(channels);
   timer.mark("fit", { rSquared: +calibration.rSquared.toFixed(4) });
@@ -247,6 +250,7 @@ export async function buildLaserCalibration(opts: {
   const compositeProfile = extractIntensityProfile(composite, roi, {
     useMaxChannel: true,
     vertical: opts.vertical,
+    lineariseGamma,
   });
   const saturation = checkSaturation(composite, roi);
   timer.mark("extracted+saturation", { points: compositeProfile.length });
@@ -274,10 +278,12 @@ export async function reextractAll(opts: {
   images: { id: string; role: string; laserWavelength?: number | null }[];
   roi: Rect | null;
   vertical: boolean;
+  lineariseGamma?: boolean;
   /** When "laser", calibration is fit from the laser captures, not the composite. */
   lightType?: string;
 }): Promise<ReextractResult> {
   const roi = opts.roi ?? DEFAULT_ROI;
+  const lineariseGamma = opts.lineariseGamma ?? true;
   const results = await Promise.all(
     opts.images.map(async (img) => {
       const raster = await decodeImageId(img.id);
@@ -286,6 +292,7 @@ export async function reextractAll(opts: {
       const points = extractIntensityProfile(raster, roi, {
         useMaxChannel,
         vertical: opts.vertical,
+        lineariseGamma,
       });
       const blob = await renderCropBlob(raster, opts.roi);
       return { imageId: img.id, role: img.role, points, blob, laserWavelength: img.laserWavelength };

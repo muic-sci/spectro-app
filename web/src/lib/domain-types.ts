@@ -105,6 +105,13 @@ export interface Experiment {
 
   roi: Rect | null;
   orientation: SpectrumOrientation;
+  /**
+   * Undo sRGB gamma to linear light before averaging pixels (Beer-Lambert wants
+   * linear I/I₀). On by default; the student can disable it on the Camera & ROI
+   * step (e.g. for images already in linear space). Missing on legacy records →
+   * treated as `true`.
+   */
+  lineariseGamma: boolean;
   calibration: Calibration | null;
   lambdaMax: number | null;
   calibrationCurve: CalibrationCurve | null;

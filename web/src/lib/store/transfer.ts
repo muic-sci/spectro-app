@@ -287,6 +287,9 @@ async function importOne(bundle: Bundle, name: string): Promise<string> {
     ...exp,
     id: expId,
     name,
+    // Bundles exported before the gamma toggle have no field; the old code always
+    // linearised, so default missing → true (keeps imported science identical).
+    lineariseGamma: exp.lineariseGamma ?? true,
     images: exp.images.map((im) => ({ ...im, id: imageIdMap.get(im.id)!, url: "" })),
     standards: exp.standards.map((s) => ({
       ...s,

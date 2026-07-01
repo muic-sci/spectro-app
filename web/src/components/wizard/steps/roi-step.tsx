@@ -29,6 +29,7 @@ export function RoiStep({
   experimentId,
   roi,
   orientation,
+  lineariseGamma,
   images,
   calibrationImageUrl,
   lightType,
@@ -38,6 +39,7 @@ export function RoiStep({
   experimentId: string;
   roi: Roi | null;
   orientation: Orientation;
+  lineariseGamma: boolean;
   /** Every stored image, so a ROI/orientation change can re-extract them all. */
   images: { id: string; role: string; laserWavelength?: number | null }[];
   calibrationImageUrl: string | null;
@@ -103,6 +105,7 @@ export function RoiStep({
         imageUrl={calibrationImageUrl}
         initialRoi={roi}
         initialOrientation={orientation}
+        initialLineariseGamma={lineariseGamma}
         lightType={lightType}
       />
 

@@ -39,6 +39,7 @@ export function RoiBoxEditor({
   imageUrl,
   initialRoi,
   initialOrientation = "horizontal",
+  initialLineariseGamma = true,
   lightType = "fluorescent",
 }: {
   experimentId: string;
@@ -47,6 +48,8 @@ export function RoiBoxEditor({
   imageUrl: string;
   initialRoi: Rect | null;
   initialOrientation?: Orientation;
+  /** Current gamma-correction setting (experiment-global). */
+  initialLineariseGamma?: boolean;
   /** "laser" → recompute calibration from the laser captures, not the composite. */
   lightType?: string;
 }) {
@@ -57,6 +60,7 @@ export function RoiBoxEditor({
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [orientation, setOrientation] = useState<Orientation>(initialOrientation);
   const [box, setBox] = useState<Rect | null>(initialRoi);
+  const [gamma, setGamma] = useState(initialLineariseGamma);
   const [saving, setSaving] = useState(false);
   // Live colour-gradient analysis of the current box → auto orientation + goodness.
   const [score, setScore] = useState<OrientationScore | null>(null);
@@ -241,7 +245,7 @@ export function RoiBoxEditor({
    * Re-extract every profile + crop for `nextRoi`/`nextOrientation` in the
    * browser, then persist. `full` ignores the drawn box and uses the whole strip.
    */
-  async function commit(full: boolean, nextOrientation: Orientation) {
+  async function commit(full: boolean, nextOrientation: Orientation, nextGamma = gamma) {
     if (saving || !natural) return;
     setSaving(true);
     try {
@@ -260,6 +264,7 @@ export function RoiBoxEditor({
         images,
         roi,
         vertical: nextOrientation === "vertical",
+        lineariseGamma: nextGamma,
         lightType,
       });
 
@@ -267,6 +272,7 @@ export function RoiBoxEditor({
         experimentId,
         roi,
         orientation: nextOrientation,
+        lineariseGamma: nextGamma,
         profiles,
         crops: crops.map((c) => ({ imageId: c.imageId, blob: c.blob })),
         calibration,
@@ -277,6 +283,14 @@ export function RoiBoxEditor({
     } finally {
       setSaving(false);
     }
+  }
+
+  function toggleGamma() {
+    if (saving) return;
+    const next = !gamma;
+    setGamma(next);
+    // Re-extract every image with the new gamma setting, keeping the current ROI.
+    void commit(false, orientation, next);
   }
 
   function chooseOrientation(next: Orientation) {
@@ -395,6 +409,31 @@ export function RoiBoxEditor({
             (so each line is one colour), or pick the orientation manually.
           </p>
         )}
+
+        {/* Gamma correction: undo sRGB gamma to linear light before averaging pixels. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={gamma}
+            disabled={saving}
+            onClick={toggleGamma}
+            className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-60"
+            style={{ background: gamma ? "var(--accent-color)" : "var(--panel-2)" }}
+          >
+            <span
+              className="inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform"
+              style={{ transform: gamma ? "translateX(1.25rem)" : "translateX(0.15rem)" }}
+            />
+          </button>
+          <span className="text-xs text-t2">
+            Gamma correction {gamma ? "on" : "off"}
+          </span>
+          <span className="text-xs text-t4">
+            — linearise sRGB before averaging (recommended for Beer-Lambert). Toggling re-analyses
+            every capture.
+          </span>
+        </div>
       </div>
 
       <div

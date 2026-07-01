@@ -14,7 +14,7 @@ import { Button } from "@heroui/react";
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { Icon, StatusChip } from "@/components/ui/primitives";
 import { buildLaserCalibration } from "@/lib/analysis-client";
-import { persistCapture } from "@/lib/store/experiments";
+import { getExperiment, persistCapture } from "@/lib/store/experiments";
 import { useWizardReload } from "@/components/wizard/wizard-context";
 import { captureLog, startTimer } from "@/lib/capture-log";
 import { wavelengthToRgb } from "@/lib/wavelength-color";
@@ -68,11 +68,13 @@ export function LaserCaptureStep({
           .map((c) => captured(c.wavelength))
           .filter((li): li is LaserImage => !!li)
           .map((li) => ({ id: li.id, wavelength: li.wavelength }));
+        const lineariseGamma = (await getExperiment(experimentId))?.lineariseGamma ?? true;
         const result = await buildLaserCalibration({
           experimentId,
           lasers,
           roi,
           vertical: orientation === "vertical",
+          lineariseGamma,
         });
         timer.mark("built composite (client done)", { points: result.compositeProfile.length });
         await persistCapture({
