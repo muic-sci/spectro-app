@@ -121,7 +121,14 @@ export function CaptureControls({
       {needsConcentration && (
         <label className="flex flex-col gap-1">
           <span className="text-xs uppercase tracking-wide text-t3">
-            Concentration{unit ? ` (${unit})` : ""}
+            {/* the unit must escape the uppercase transform: "µ" uppercases to "Μ" (mu), turning µM into ΜM */}
+            Concentration
+            {unit ? (
+              <>
+                {" "}
+                (<span className="normal-case">{unit}</span>)
+              </>
+            ) : null}
           </span>
           <input
             type="number"
