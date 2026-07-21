@@ -30,4 +30,12 @@ export const SpectralConstants = {
 
   /** A pixel is saturated when any channel is at/above this 8-bit value. */
   saturationThreshold: 250,
+
+  /**
+   * Required dark margin on each end of the spectrum inside the ROI, as a
+   * fraction of the box length along the dispersion axis (see roi-margins.ts).
+   */
+  roiDarkMarginLamp: 0.1,
+  /** Laser lines are narrow — require more dark context per end. */
+  roiDarkMarginLaser: 0.2,
 } as const;

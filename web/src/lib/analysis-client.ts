@@ -21,6 +21,8 @@ import { startTimer } from "@/lib/capture-log";
 import {
   extractIntensityProfile,
   checkSaturation,
+  checkRoiMargins,
+  requiredDarkMargin,
   scoreOrientation,
   calibrateFromLampProfile,
   calibrateFromLaserProfiles,
@@ -33,6 +35,7 @@ import type {
   OrientationScore,
   RasterImage,
   Rect,
+  RoiMarginCheck,
   SaturationResult,
 } from "@/lib/analysis";
 
@@ -168,6 +171,28 @@ export async function suggestOrientation(
 ): Promise<OrientationScore> {
   const raster = await decodeFromUrl(url);
   return scoreOrientation(raster, roi ?? DEFAULT_ROI);
+}
+
+/**
+ * Check the ROI's dark margins along the dispersion axis — the drawn box must
+ * keep dark background on BOTH ends of the spectrum (10% of its length for the
+ * lamp, 20% for laser lines) or the band restriction loses its dark context
+ * and a slightly-shifted capture can clip. Decode is cached, so this is cheap
+ * to run live while the student drags the box.
+ */
+export async function assessRoiMargins(
+  url: string,
+  roi: Rect | null,
+  opts: { vertical: boolean; lightType?: string; lineariseGamma?: boolean },
+): Promise<RoiMarginCheck> {
+  const raster = await decodeFromUrl(url);
+  // The editor's image is the lamp / laser composite → max-channel, like calibration.
+  const profile = extractIntensityProfile(raster, roi ?? DEFAULT_ROI, {
+    useMaxChannel: true,
+    vertical: opts.vertical,
+    lineariseGamma: opts.lineariseGamma ?? true,
+  });
+  return checkRoiMargins(profile, requiredDarkMargin(opts.lightType));
 }
 
 export interface ClientCapture {

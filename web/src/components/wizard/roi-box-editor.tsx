@@ -16,10 +16,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@heroui/react";
 import { Icon } from "@/components/ui/primitives";
-import { reextractAll, suggestOrientation } from "@/lib/analysis-client";
+import { assessRoiMargins, reextractAll, suggestOrientation } from "@/lib/analysis-client";
 import { persistReextract } from "@/lib/store/experiments";
 import { useWizardReload } from "@/components/wizard/wizard-context";
-import type { OrientationScore } from "@/lib/analysis";
+import type { OrientationScore, RoiMarginCheck } from "@/lib/analysis";
 
 interface Rect {
   left: number;
@@ -64,6 +64,8 @@ export function RoiBoxEditor({
   const [saving, setSaving] = useState(false);
   // Live colour-gradient analysis of the current box → auto orientation + goodness.
   const [score, setScore] = useState<OrientationScore | null>(null);
+  // Live dark-margin check of the current box along the dispersion axis.
+  const [margins, setMargins] = useState<RoiMarginCheck | null>(null);
   // While true, the orientation chip follows the detected axis as the box changes.
   const [auto, setAuto] = useState(true);
   const autoRef = useRef(true); // mirror of `auto` for the async scoring callback
@@ -159,6 +161,39 @@ export function RoiBoxEditor({
       clearTimeout(t);
     };
   }, [box, natural, imageUrl]);
+
+  // Check the dark margins on each end of the spectrum whenever the box, the
+  // orientation or the gamma setting changes (debounced; decode is cached).
+  // Too little dark background turns the box orange and disables Save.
+  useEffect(() => {
+    if (!natural) return;
+    const roi: Rect | null = box
+      ? {
+          left: Math.round(box.left),
+          top: Math.round(box.top),
+          width: Math.round(box.width),
+          height: Math.round(box.height),
+        }
+      : null;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      assessRoiMargins(imageUrl, roi, {
+        vertical: orientation === "vertical",
+        lightType,
+        lineariseGamma: gamma,
+      })
+        .then((m) => {
+          if (!cancelled) setMargins(m);
+        })
+        .catch(() => {
+          /* leave the previous assessment in place */
+        });
+    }, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [box, natural, imageUrl, orientation, lightType, gamma]);
 
   function startDrag(mode: Mode, e: React.PointerEvent) {
     if (!natural) return;
@@ -315,7 +350,14 @@ export function RoiBoxEditor({
 
   // Box as % of the image, so it tracks the responsively-sized <img>.
   const pct = (v: number, of: number) => `${(v / of) * 100}%`;
-  const handle = "absolute h-3 w-3 -m-1.5 rounded-full border border-bg bg-accent touch-none";
+  const handle = "absolute h-3 w-3 -m-1.5 rounded-full border border-bg touch-none";
+
+  // Dark-margin gate: enough dark background on each end of the spectrum
+  // (10% of the box length for the lamp, 20% for laser lines) or Save is
+  // disabled and the box turns orange. Null = not assessed yet (don't block).
+  const marginsOk = margins == null || margins.ok;
+  const boxTone = marginsOk ? "var(--accent-color)" : "var(--warn)";
+  const [endA, endB] = orientation === "vertical" ? ["top", "bottom"] : ["left", "right"];
   const orientations: { value: Orientation; label: string }[] = [
     { value: "horizontal", label: "↔ Horizontal" },
     { value: "vertical", label: "↕ Vertical" },
@@ -456,28 +498,48 @@ export function RoiBoxEditor({
 
         {natural && box && (
           <div
-            className="absolute border-2 border-accent"
+            className="absolute border-2"
             style={{
               left: pct(box.left, natural.w),
               top: pct(box.top, natural.h),
               width: pct(box.width, natural.w),
               height: pct(box.height, natural.h),
+              borderColor: boxTone,
               boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)",
               cursor: "move",
               touchAction: "none",
             }}
             onPointerDown={(e) => startDrag("move", e)}
           >
-            <span className={`${handle} left-0 top-0`} style={{ cursor: "nwse-resize" }} onPointerDown={(e) => startDrag("nw", e)} />
-            <span className={`${handle} right-0 top-0`} style={{ cursor: "nesw-resize" }} onPointerDown={(e) => startDrag("ne", e)} />
-            <span className={`${handle} left-0 bottom-0`} style={{ cursor: "nesw-resize" }} onPointerDown={(e) => startDrag("sw", e)} />
-            <span className={`${handle} right-0 bottom-0`} style={{ cursor: "nwse-resize" }} onPointerDown={(e) => startDrag("se", e)} />
+            <span className={`${handle} left-0 top-0`} style={{ background: boxTone, cursor: "nwse-resize" }} onPointerDown={(e) => startDrag("nw", e)} />
+            <span className={`${handle} right-0 top-0`} style={{ background: boxTone, cursor: "nesw-resize" }} onPointerDown={(e) => startDrag("ne", e)} />
+            <span className={`${handle} left-0 bottom-0`} style={{ background: boxTone, cursor: "nesw-resize" }} onPointerDown={(e) => startDrag("sw", e)} />
+            <span className={`${handle} right-0 bottom-0`} style={{ background: boxTone, cursor: "nwse-resize" }} onPointerDown={(e) => startDrag("se", e)} />
           </div>
         )}
       </div>
 
+      {margins && !margins.ok && (
+        <p className="text-xs" style={{ color: "var(--warn)" }}>
+          {margins.bandFound ? (
+            <>
+              Leave at least {Math.round(margins.required * 100)}% dark background on each end of
+              the spectrum — right now the box has {endA} {Math.round(margins.lead * 100)}% and{" "}
+              {endB} {Math.round(margins.tail * 100)}%. Drag the {endA}/{endB} edges outward so
+              some dark strip shows past both ends, then save.
+            </>
+          ) : (
+            <>No bright spectrum found inside the box — move it over the strip first.</>
+          )}
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="primary" isDisabled={saving || !box} onClick={() => commit(false, orientation)}>
+        <Button
+          variant="primary"
+          isDisabled={saving || !box || !marginsOk}
+          onClick={() => commit(false, orientation)}
+        >
           <Icon name="check" size={16} /> {saving ? "Saving…" : "Save region"}
         </Button>
         <Button variant="ghost" isDisabled={saving} onClick={useFullStrip}>
