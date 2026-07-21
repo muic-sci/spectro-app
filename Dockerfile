@@ -1,19 +1,20 @@
 # Spectro Web — fully static site (Next.js `output: export`) served by nginx.
-# Build context is the web/ directory. There is no app server, database or API:
-# `next build` emits a static `out/` (HTML/JS/CSS) that runs entirely in the
-# browser. The runtime image is just nginx serving those files.
+# Built by the deployd shared CI include with context = repo ROOT (`docker build .`);
+# only web/ enters the build context (see .dockerignore). There is no app server,
+# database or API: `next build` emits a static `out/` (HTML/JS/CSS) that runs
+# entirely in the browser. The runtime image is just nginx serving those files.
 
 # ── Stage 1: install dependencies ────────────────────────────────────────────
 FROM node:22-slim AS deps
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY web/package.json web/package-lock.json ./
 RUN npm ci
 
 # ── Stage 2: build the static export ─────────────────────────────────────────
 FROM node:22-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY web/ .
 
 # Version tag injected by CI (e.g. v1.2.3); baked into the bundle for the badge.
 ARG APP_VERSION=dev
@@ -24,7 +25,7 @@ RUN npm run build   # → /app/out
 
 # ── Stage 3: runtime (static nginx) ──────────────────────────────────────────
 FROM nginx:1.27-alpine AS runner
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/out /usr/share/nginx/html
 
 EXPOSE 80

@@ -1,0 +1,14 @@
+# docker-compose.prod.yml — production compose for the deployd controller.
+#
+# deployd fetches this file from the repo at the released tag and deploys it
+# together with a generated override that pins the image to the release vX.Y.Z
+# and routes the app's domain (traefik) to port 80 inside the container, where
+# nginx serves the static export. Do NOT publish ports or add traefik labels
+# here — the override handles routing.
+#
+# Fully static site: no database, no app server, no env, no persistent volumes —
+# everything (data + compute) lives in each user's browser (IndexedDB).
+services:
+  app:
+    image: registry.gitlab.com/muzoo/muic/spectro-app # tag pinned by deployd's override
+    restart: unless-stopped

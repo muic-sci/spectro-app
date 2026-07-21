@@ -16,7 +16,8 @@ spectro-app/
 │                 # Guidance, ROI, charts, analysis, results, export — all client-side.
 ├── docs/         # web-refactor-plan.md, web-ux-brief.md, design_handoff_continuous_camera/
 ├── materials/    # reference paper + the 002 sample dataset (golden test source)
-└── docker/, .gitlab-ci.yml  # build/deploy the static web/ image (nginx) on vX.Y.Z tags
+└── Dockerfile, docker-compose.prod.yml, .gitlab-ci.yml
+                  # deployd: CI builds the static image on vX.Y.Z tags; deployd deploys it
 ```
 
 ## web — the app
@@ -163,10 +164,8 @@ npm run preview    # serve the built out/ locally (npx serve out)
 ```
 There is no database, no `.env` to configure, and no auth. Data lives in the browser's IndexedDB; use the list page's **Export/Import** to move or back up experiments.
 
-### Deploy (Docker, static) — tag → GitLab CI → webhook → server
-Push a `vX.Y.Z` tag → `.gitlab-ci.yml` builds `web/Dockerfile` (context `web`) and pushes to the GitLab registry → HMAC webhook → the server's `docker/cron-deploy.sh` (cron) pulls the new tag and runs `docker compose up -d`. The image is a **multi-stage static build**: `node` builds the export, then **nginx** (`web/nginx.conf`) serves `out/` on **:80** behind nginx-proxy. **No database, no migrations, no persistent volume.**
-- **`docker/docker-compose.yml`** runs a single `app` service (the static image) with `VIRTUAL_HOST`/`VIRTUAL_PORT=80`/`LETSENCRYPT_HOST` for nginx-proxy + acme-companion. The `docker/` folder is rsync'd to the server; `.env` is server-managed (see `docker/.env.example`).
-- **Server setup:** DNS A-record; nginx-proxy + acme-companion on the `nginx-proxy` network; a deploy dir holding the synced compose + `.env` (`SPECTRO_APP_IMAGE` / `VIRTUAL_HOST` / `LETSENCRYPT_HOST` / `PROXY_CONTAINER`); `docker login` to the registry for cron pulls; `cron-deploy.sh` in crontab; CI vars `DEPLOY_WEBHOOK_SECRET` + `DEPLOY_WEBHOOK_URL`. Nothing to back up (no server-side data).
+### Deploy (deployd) — tag → GitLab CI → deployd → traefik
+Managed by **deployd** (the single-VM deploy controller; app slug `spectro-app`, domain **spectro.muzoo.io**). Push a `vX.Y.Z` tag → the shared CI include (`muzoo/deployd` → `ci/deployd-build.gitlab-ci.yml`, the *entire* `.gitlab-ci.yml`) builds the root `Dockerfile` (context = repo root, `APP_VERSION` build-arg passed automatically) and pushes `:vX.Y.Z` + `:latest` to the GitLab registry → the deployd-managed project webhook fires → deployd verifies tag + green pipeline + registry image via the GitLab API, then pulls `docker-compose.prod.yml` at that tag and deploys it with a generated override that pins the image tag and routes the domain (traefik) to **:80** in the container (nginx serving the static export). The image is a **multi-stage static build**: `node` builds the export, then **nginx** (`web/nginx.conf`) serves `out/`. **No database, no migrations, no persistent volume, no env** — `docker-compose.prod.yml` is a single `app` service with no ports/labels (deployd's override handles routing). The old webhook-deploy plumbing (`docker/` + HMAC webhook CI job + `DEPLOY_WEBHOOK_*` vars) is retired.
 
 ## Git Commit Convention
 All commits follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>[scope]: <short description>` + optional bullet body.
