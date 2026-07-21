@@ -75,3 +75,6 @@ docker/uploads/
 
 # Local-only reference dataset (kept on disk, not tracked)
 materials/
+.playwright-mcp/
+# Manuscript reference material (published ACS PDF) — local-only, like materials/
+paper/resources/
