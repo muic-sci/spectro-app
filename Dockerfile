@@ -30,5 +30,8 @@ COPY --from=builder /app/out /usr/share/nginx/html
 
 EXPOSE 80
 
+# 127.0.0.1, not localhost: busybox wget resolves localhost to ::1 first and
+# nginx binds IPv4 only, so a localhost probe is refused and the container is
+# marked unhealthy — which makes traefik silently skip it (no router, no cert).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget -q --spider http://localhost/ || exit 1
+  CMD wget -q --spider http://127.0.0.1/ || exit 1
