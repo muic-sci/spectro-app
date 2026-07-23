@@ -84,6 +84,9 @@ Domain types (the old Prisma enums/models) live in `src/lib/domain-types.ts`.
 ## Deploy
 
 `npm run build` emits a static `out/` — host it on any static host (or open
-`out/index.html`). The repo ships a Docker image (`Dockerfile` → nginx serving
-`out/`) wired to a tag → CI → webhook → `docker compose up -d` flow; see
-[`../CLAUDE.md`](../CLAUDE.md) and [`../docker`](../docker).
+`out/index.html`). Production runs through **deployd**: push a `vX.Y.Z` tag →
+GitLab CI (`../.gitlab-ci.yml`) builds the root `Dockerfile` (nginx serving
+`out/`) and pushes it as `:vX.Y.Z` → deployd verifies tag + green pipeline +
+registry image via the GitLab API, then deploys `../docker-compose.prod.yml`,
+which pins the image via the injected `${DEPLOYD_TAG}` and gets domain routing
+(traefik) from deployd's generated override. See [`../CLAUDE.md`](../CLAUDE.md).
