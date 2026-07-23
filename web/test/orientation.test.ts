@@ -6,7 +6,7 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import sharp from "sharp";
+import sharp, { type Sharp } from "sharp";
 import { describe, expect, it } from "vitest";
 import {
   calibrateFromLampProfile,
@@ -18,7 +18,7 @@ import {
 
 const FIXTURES = resolve(__dirname, "fixtures/spectro-002");
 
-async function rawOf(pipeline: sharp.Sharp): Promise<RasterImage> {
+async function rawOf(pipeline: Sharp): Promise<RasterImage> {
   const { data, info } = await pipeline.removeAlpha().raw().toBuffer({ resolveWithObject: true });
   return { width: info.width, height: info.height, data };
 }
