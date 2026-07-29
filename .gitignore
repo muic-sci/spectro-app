@@ -1,16 +1,8 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
+# ── OS / editor ─────────────────────────────────────────────────────────
 .DS_Store
-.atom/
-.build/
-.buildlog/
+*.log
+*.swp
 .history
-.svn/
-.swiftpm/
-migrate_working_dir/
 
 # IntelliJ related
 *.iml
@@ -23,58 +15,26 @@ migrate_working_dir/
 # is commented out by default.
 #.vscode/
 
-# Flutter/Dart/Pub related (app now lives in mobile)
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-mobile/build/
-/coverage/
-
-# ── Web app (web) ───────────────────────────────────────────────────────
+# ── Web app (web/) ──────────────────────────────────────────────────────
+# The app is a fully static Next.js export: `next build` emits web/out/.
 node_modules/
 web/.next/
 web/out/
-web/build/
 web/next-env.d.ts
 web/coverage/
 web/*.tsbuildinfo
-# Uploaded capture images (dev local-disk store; object storage in prod)
-web/storage/
-# Prisma generated client (regenerated via `prisma generate`)
-web/src/generated/prisma/
-# Local env files (commit only *.example)
+# Local env files (commit only *.example). The app itself needs no env — these
+# stay as a guard against ever committing one.
 .env
 .env*.local
 web/.env
 web/.env*.local
 
-# Dart code generation
-*.g.dart
-*.freezed.dart
-*.mocks.dart
-
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-
-# Server-side bind-mount data dirs (default paths when compose runs from docker/)
-docker/pgdata/
-docker/uploads/
-
-# Local-only reference dataset (kept on disk, not tracked)
+# ── Local-only files (kept on disk, never tracked) ──────────────────────
+# Reference paper + the 002 sample dataset. Scrubbed from git history and
+# deliberately untracked; the golden test reads its own tracked copy at
+# web/test/fixtures/spectro-002, so a fresh clone still passes.
 materials/
-.playwright-mcp/
-# Manuscript reference material (published ACS PDF) — local-only, like materials/
+# Manuscript reference material (the published ACS PDF) — local-only, like materials/
 paper/resources/
+.playwright-mcp/
