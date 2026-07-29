@@ -1,5 +1,6 @@
 // Build version, baked in at build time. CI passes the git tag (e.g. v1.2.3)
-// as the APP_VERSION build arg → NEXT_PUBLIC_APP_VERSION (see web/Dockerfile);
+// as the APP_VERSION build arg → NEXT_PUBLIC_APP_VERSION (see the repo-root
+// Dockerfile, which builds web/ from the repository root);
 // local builds fall back to "dev". NEXT_PUBLIC_ vars are inlined at build, so
 // this renders on both server and client without any runtime lookup.
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "dev";

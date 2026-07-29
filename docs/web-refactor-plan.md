@@ -1,11 +1,126 @@
-# Spectro Web — Refactor & Design Plan
+# Spectro Web — Architecture Decision Record
 
-> **Purpose of this document**
-> The current Spectro app is a Flutter mobile app. Running the full analytical workflow on a small phone screen is awkward. This document plans a **web-first refactor**: the *thinking, guiding, and analysis* happen on a large screen (laptop/tablet browser), and the **phone is used only as a camera**. The two devices are paired into one shared session via a QR code.
+> **Status: HISTORICAL, with living decisions.**
+> This was written as the forward plan for a **two-device** refactor (a laptop "brain" +
+> a paired phone camera, joined over a QR code, with a Next.js backend doing the image
+> processing). **That architecture was built and then removed.** The app today is a
+> **fully static, in-browser** single-device app: no server, no database, no auth, no
+> phone client, no API routes. Data lives in the browser's IndexedDB.
 >
-> This is a **planning / design document**, not an implementation. Use it as the brief to decide the final design (e.g. in Claude design / artifacts) before any code is written. Decisions still open are collected in [§12 Open Design Questions](#12-open-design-questions).
+> This document is kept because several decisions made here are **still load-bearing**
+> — the science port, the algorithm constants, the module seam, and the golden test.
+> Those are collected in [§A. Decisions that still hold](#a-decisions-that-still-hold).
+> Everything after §B is the superseded two-device design, retained only so a future
+> reader knows what was tried and why it was dropped.
+>
+> **For the current architecture, read [`../CLAUDE.md`](../CLAUDE.md)** — that is the
+> authoritative, maintained description. Companion UX document:
+> [web-ux-brief.md](web-ux-brief.md) (same historical framing).
 
 ---
+
+## A. Decisions that still hold
+
+These survived the static refactor unchanged and describe the app as it exists today.
+
+### A.1 The science is ported, not re-derived
+The Flutter app's domain logic was the asset worth preserving. It was ported **once**,
+faithfully, from Dart to TypeScript and has not been re-derived since. The port lives in
+`web/src/lib/analysis/` as **pure functions with no native dependencies**
+(`math` / `image` / `calibration` / `absorbance` / `roi-margins`).
+
+### A.2 One module seam for the analysis core
+The core sits behind a single module boundary (`web/src/lib/analysis/`, re-exported from
+`index.ts`) with one entry function per operation. This was originally insurance for
+swapping Node for a Python sidecar. **It paid off differently than expected**: because
+the core was pure and decoder-agnostic, moving the whole pipeline from the server into
+the browser only required replacing the *decoder*, not the science. Today
+`analysis/decode.client.ts` (`createImageBitmap` → canvas → `getImageData`) is the only
+platform-specific piece, and `analysis-client.ts` orchestrates decode + extract +
+calibrate + crop entirely client-side.
+
+> The lesson worth keeping: **the seam is what made the architecture reversible.** Keep
+> the analysis core free of `window`, `sharp`, DOM, and storage concerns.
+
+### A.3 The golden-data regression test
+Recommended here, and built: `web/test/analysis.golden.test.ts` runs the 002 fixture
+through the pure core and pins the science. It decodes with **`sharp`** (a devDependency,
+Node-only) purely as a test decoder — the browser decoder is the source of truth for the
+live app, and the two differ at the sub-pixel level.
+
+### A.4 The load-bearing algorithm constants
+Ported faithfully and still in force (see `web/src/lib/analysis/constants.ts`):
+
+- **Gamma linearisation** (per channel, before any averaging):
+  `norm ≤ 0.04045 → norm/12.92`, else `((norm + 0.055)/1.055)^2.4`. On by default; now a
+  persisted per-experiment toggle (`lineariseGamma`).
+- **Two intensity methods**: luminance `0.299R + 0.587G + 0.114B` (blank/standards/unknown)
+  vs **max-channel `max(R,G,B)` for the calibration lamp only** — luminance weights blue at
+  0.114 and hides the lamp's violet lines.
+- **Saturation**: any channel ≥ **250**/255 → `{saturatedCount, totalCount, fraction, isSaturated}`.
+- **Calibration smoothing window = 15** (`calibrationSmoothingWindow`).
+- **Lamp lines**: 434.5 / 486.0 / 544.0 / 587.0 / 611.5 nm; OLS fit `λ = slope·px + intercept`.
+- **Expected on the 550 px sample**: slope ≈ 0.582 nm/px, intercept ≈ 397.9 nm, R² ≈ 0.9998;
+  peaks at px ≈ 61, 153, 249, 316, 365.
+- **Default ROI fallback** (effectively the full image, clamped to actual size) is preserved
+  for pre-cropped strips.
+
+> Two constants in this file have **moved on** from what was planned here, and the current
+> behaviour is documented in `CLAUDE.md`:
+> - Minimum peak separation is `round(bandWidth/15)` — sized to the detected **spectral
+>   band**, not `profile.length/15`. The original form merged the 587/611.5 nm pair whenever
+>   a capture had a large dark margin.
+> - Peaks are selected by **collinearity** (highest-R² size-5 subset of a generous candidate
+>   set, both fit directions tried), not by brightness. A near-tied collinear fit in the wrong
+>   direction used to flip the calibration blue↔red.
+> - `defaultSmoothingWindow = 5` is defined but **never referenced** — dead code. Sample
+>   spectra are analysed unsmoothed.
+
+### A.5 The workflow shape
+The step sequence planned here is the sequence shipped, with two later changes:
+`absorbanceReview` was **merged into `standards`** (one live step: add standards, see the
+spectra and the curve update immediately), and `experimentSetup` moved **before** the
+wizard onto the setup form. Both remain in the `WorkflowStep` union for their labels.
+
+### A.6 Data model
+The types sketched in §7 below are essentially the shipped shapes, minus the pairing
+fields. See `web/src/lib/domain-types.ts` for the current definitions, and `CLAUDE.md` for
+the record layout. Notable divergences from the sketch: there is one **experiment-global**
+concentration `unit` (not per-standard); `calibrationCurve` **is** persisted (the app stores
+every computed step); `standards`/`unknowns` reference images by `imageId`; and `unknowns`
+is a real list — many unknowns per experiment.
+
+---
+
+## B. Why the two-device design was abandoned
+
+The plan below optimised for a hardware advantage: the native phone app could **lock focus
+and exposure**, which matters because absorbance compares light intensity across photos. The
+cost was an entire distributed system — a server, a database, auth, a realtime channel, image
+upload, a pairing handshake, and a second codebase to ship and install.
+
+The user chose to drop all of it in favour of a **single static page the student just opens**:
+no install, no account, no server to run or pay for, no data leaving the machine (a real
+benefit for classroom/institutional use). Photos are taken with whatever camera app the
+student has and uploaded from the file picker.
+
+**The trade-off that was accepted:** exposure consistency is now the student's
+responsibility rather than being enforced by the app. This is mitigated by guidance rather
+than hardware control — the saturation warning after every capture, and the fact that a
+blank captured under different exposure than the standards produces a visibly bad
+calibration curve.
+
+> If exposure lock ever becomes worth revisiting, the design work is **not** lost: the
+> continuous-camera-session design in
+> [`design_handoff_continuous_camera/`](design_handoff_continuous_camera/) specifies the
+> lock semantics per platform (including a `getUserMedia` path that would work *inside* the
+> current static app, with no server and no second device).
+
+---
+
+# ⬇ SUPERSEDED — the original two-device plan (2026, pre-refactor)
+
+*Everything below describes an architecture that no longer exists. Retained for context only.*
 
 ## 1. Vision in one paragraph
 
@@ -21,53 +136,48 @@ A student opens **Spectro Web** on a laptop. They pick an *experiment mode* and 
 └──────────────────────────┘                                 └──────────────────────────┘
 ```
 
----
-
 ## 2. What we are keeping (the science is already correct)
 
-The Flutter app's **domain logic is the asset worth preserving**. It is well-tested and documented. The refactor is about *moving the workflow/analysis UI to the web while keeping the native app as a focus-locked camera*, **not** re-deriving the science. The algorithms to carry over verbatim (see [§8](#8-core-algorithms-to-port-source-of-truth)):
+*(Superseded framing — the port happened; see §A.1. The Dart source paths below no longer
+exist in this repo.)*
 
-| Concern | Current Dart location | Notes |
+| Concern | Original Dart location | Ported to |
 |---|---|---|
-| sRGB → linear gamma | `image_processing.dart › _srgbToLinear` | Must run in *linear light* before any ratio |
-| Intensity profile (ROI → 1-D) | `image_processing.dart › extractIntensityProfile` | Luminance vs max-channel modes |
-| Saturation check | `image_processing.dart › checkSaturation` | ≥250/255 on any channel |
-| Moving average | `math_utils.dart › movingAverage` | Smoothing before peak detection |
-| Local maxima / prominence | `math_utils.dart › findLocalMaxima` | Calibration peak auto-detect |
-| Linear regression (OLS + R²) | `math_utils.dart › linearRegression` | Used for both pixel→λ and Beer-Lambert |
-| Absorbance `A = −log₁₀(I/I₀)` | `absorbance_spectra_screen.dart › _computeAbsorbance` | Per-pixel against blank |
-| λmax detection + curve build | `absorbance_spectra_screen.dart` | A@λmax vs concentration |
-
-These are **not heavy algorithms** — they are column averages, a few passes over a 1-D array, and two least-squares fits. This fact drives the architecture decision in [§5](#5-key-decision-where-does-image-processing-run).
-
----
+| sRGB → linear gamma | `image_processing.dart › _srgbToLinear` | `analysis/image.ts` |
+| Intensity profile (ROI → 1-D) | `image_processing.dart › extractIntensityProfile` | `analysis/image.ts` |
+| Saturation check | `image_processing.dart › checkSaturation` | `analysis/image.ts` |
+| Moving average | `math_utils.dart › movingAverage` | `analysis/math.ts` |
+| Local maxima / prominence | `math_utils.dart › findLocalMaxima` | `analysis/math.ts` |
+| Linear regression (OLS + R²) | `math_utils.dart › linearRegression` | `analysis/math.ts` |
+| Absorbance `A = −log₁₀(I/I₀)` | `absorbance_spectra_screen.dart › _computeAbsorbance` | `analysis/absorbance.ts` |
+| λmax detection + curve build | `absorbance_spectra_screen.dart` | `analysis/absorbance.ts` + `experiment-analysis.ts` |
 
 ## 3. Workflow mapping (mobile steps → web-guided flow)
 
-The existing 5-step workflow (`WorkflowStep` enum) is preserved, but **reframed as a guided wizard** and extended with two up-front choices the user asked for.
+*(Superseded — see §A.5 for what shipped.)*
 
-| New web step | From current app | Photo needed? | What the web guides / explains |
+| Planned web step | From the Flutter app | Photo needed? | What the web guides / explains |
 |---|---|---|---|
-| **0. Experiment setup** *(new)* | — | No | Choose **experiment mode** (e.g. Beer-Lambert quantitation) and **reference light type** (e.g. fluorescent lamp for calibration). Sets defaults: lamp peak set, units, expected ranges. |
+| **0. Experiment setup** *(new)* | — | No | Choose **experiment mode** and **reference light type**. Sets defaults: lamp peak set, units, expected ranges. |
 | **1. Camera + ROI setup** | `setup` | Yes (live framing) | Explain framing the spectral strip; lock focus/exposure on phone; **draw ROI on the web** over a still frame. |
-| **2. Wavelength calibration** | `calibration` | Yes (lamp) | Capture lamp; auto-detect 5 peaks (max-channel); fit pixel→λ; show R² and explain calibration. |
-| **3a. Blank (I₀)** | `references › blank` | Yes (blank) | Explain I₀ as the incident-light reference; capture solvent/cuvette. |
-| **3b. Standards** | `references › standards` | Yes (≥2) | Capture ≥2 known concentrations; explain why a curve needs multiple points. |
-| **3c. Absorbance review** | `absorbance_analysis` (interstitial) | No | Pure computation. Confirm/adjust λmax by tapping the chart; show Beer-Lambert curve + R². |
-| **4. Unknown** | `unknown` | Yes (unknown) | Capture unknown; back-calculate concentration `c = (A − b)/m`. |
+| **2. Wavelength calibration** | `calibration` | Yes (lamp) | Capture lamp; auto-detect 5 peaks (max-channel); fit pixel→λ; show R². |
+| **3a. Blank (I₀)** | `references › blank` | Yes (blank) | Explain I₀ as the incident-light reference. |
+| **3b. Standards** | `references › standards` | Yes (≥2) | Capture ≥2 known concentrations. |
+| **3c. Absorbance review** | `absorbance_analysis` | No | Pure computation. Confirm λmax; show Beer-Lambert curve + R². |
+| **4. Unknown** | `unknown` | Yes (unknown) | Back-calculate concentration `c = (A − b)/m`. |
 | **5. Results & export** | `results` | No | Summary charts, data table, CSV download / share. |
 
-**Per-step explanation pattern** (the "guide" the user asked for): every step shows a short *Why this step matters* panel (mirrors the existing `info_card.dart` content), a *What to do* checklist, and *What we measured* after the photo returns.
+**Per-step explanation pattern** — every step shows a short *Why this step matters* panel, a
+*What to do* checklist, and *What we measured* after the photo returns. **This survived** and
+is the `GuidancePanel` in the shipped app.
 
----
+## 4. System architecture *(superseded — no server, no phone client)*
 
-## 4. System architecture
+Three logical pieces:
 
-Three logical pieces, regardless of where the line between them is drawn:
-
-1. **Web app (the brain)** — guidance UI, ROI selection, charts, results, export. Holds session state. Target stack: **Next.js (React)** per the decision in [§6](#6-technology-stack).
-2. **Phone camera client (the lens)** — the **existing native Flutter app, stripped to a camera role**. Scans QR → joins session → locks focus/exposure → captures → uploads. Deliberately minimal; reuses the app's proven camera + focus-lock code, drops the on-phone workflow/analysis UI.
-3. **Analysis core (the math)** — the ported domain algorithms from [§2](#2-what-we-are-keeping-the-science-is-already-correct). *Where this runs is the central decision* — see [§5](#5-key-decision-where-does-image-processing-run).
+1. **Web app (the brain)** — guidance UI, ROI selection, charts, results, export. Holds session state. Next.js (React).
+2. **Phone camera client (the lens)** — the existing native Flutter app, stripped to a camera role. Scans QR → joins session → locks focus/exposure → captures → uploads.
+3. **Analysis core (the math)** — the ported domain algorithms.
 
 ### 4.1 Session linking via QR (the pairing model)
 
@@ -75,242 +185,161 @@ Three logical pieces, regardless of where the line between them is drawn:
 Laptop                         Server                  Phone (native app)
   │  create session            │                               │
   │ ─────────────────────────▶ │  session {id, joinToken}      │
-  │  show QR(deep-link+token)   │                               │
+  │  show QR(deep-link+token)  │                               │
   │                            │     scan QR (in-app) ────────▶ │ deep-link → join
   │                            │ ◀──── join(token) ──────────── │
   │ ◀─ "phone connected" ───── │ ───── "you're in" ──────────▶ │
-  │                            │                               │
   │  step needs photo:         │                               │
   │  "capture blank" ────────▶ │ ──── prompt: capture blank ─▶ │ show capture UI
   │                            │ ◀──── upload(image) ────────── │ focus-lock + shutter
   │ ◀─ image ready + spectrum ─│  (core runs here)             │
 ```
 
-- A **session** is the unit both devices share — analogous to today's `Project`. It carries `mode`, `lightType`, `roi`, `calibration`, `blank`, `standards[]`, `unknowns[]`, plus a `currentStep` and a `pendingCapture` slot.
-- The QR encodes a **session id + short-lived token**. The phone scans it **inside the native app** (in-app QR scanner) and binds to the session; alternatively a deep link / universal link (e.g. `spectro://join?s=<sessionId>&t=<token>`) can hand off into the app. No browser is involved on the phone.
-- The laptop **drives**; the phone **reacts** to a `pendingCapture` request and replies with an upload. This keeps the phone UI trivial and avoids the student navigating the workflow on the small screen.
+- A **session** was the unit both devices shared, carrying `mode`, `lightType`, `roi`, `calibration`, `blank`, `standards[]`, `unknowns[]`, plus `currentStep` and a `pendingCapture` slot.
+- The QR encoded a **session id + short-lived token**, scanned inside the native app.
+- The laptop **drove**; the phone **reacted** to a `pendingCapture` request.
 
-### 4.2 Realtime sync options (to be chosen in design)
+### 4.2 Realtime sync options
 
 | Option | How | Pros | Cons |
 |---|---|---|---|
-| **Server-Sent Events + REST upload** *(recommended start)* | Laptop & phone subscribe to `/session/:id/events`; phone POSTs image | Simple, one-directional push fits "laptop drives", easy on Next.js | Two channels (SSE down, POST up) |
-| **WebSocket** | Bidirectional socket per session | Lowest latency, symmetric | More infra (sticky sessions / a socket server) |
-| **Polling** | Phone/laptop poll session state | Trivial, no infra | Laggy, wasteful |
-| **Managed realtime** (Supabase Realtime / Pusher / Ably) | Hosted pub/sub | No socket infra to run | External dependency, cost |
+| **Server-Sent Events + REST upload** *(chosen)* | Laptop & phone subscribe to `/session/:id/events`; phone POSTs image | Simple, fits "laptop drives", easy on Next.js | Two channels (SSE down, POST up) |
+| **WebSocket** | Bidirectional socket per session | Lowest latency, symmetric | More infra |
+| **Polling** | Poll session state | Trivial | Laggy, wasteful |
+| **Managed realtime** (Supabase / Pusher / Ably) | Hosted pub/sub | No socket infra | External dependency, cost |
 
-> The image **upload itself** is always a plain multipart POST (photos are too big for a socket frame). Realtime is only for *state/prompt* sync.
-
----
+SSE was implemented, then deleted with the rest of the server.
 
 ## 5. Key decision: where does image processing run?
 
-You raised exactly the right tension:
-
 > *"Handing off to Python may slow down the response, but processing in Next.js we may not have sufficient image libraries."*
-
-Here is the honest analysis for **this specific workload**.
 
 ### 5.1 What the workload actually is
 
-- Decode one JPEG (a phone photo, e.g. ~1–4 MP, often pre-cropped to a strip).
+- Decode one JPEG (~1–4 MP, often pre-cropped to a strip).
 - Read pixels inside a rectangular ROI.
-- For each column: linearise R/G/B, average → one number. (≈ a few hundred columns × ROI-height pixels.)
-- Run a moving average, find local maxima, do **two** ordinary least-squares fits, and a per-pixel `−log₁₀` ratio.
+- Per column: linearise R/G/B, average → one number.
+- A moving average, local maxima, **two** OLS fits, and a per-pixel `−log₁₀` ratio.
 
-This is **light numeric work over a 1-D array** — milliseconds of CPU. The only non-trivial primitive is **JPEG decode + raw pixel access**, and Node has an excellent, fast native library for exactly that: **`sharp`** (libvips). Peak detection and regression are ~30 lines each and already written in Dart.
+**Light numeric work over a 1-D array** — milliseconds of CPU. The only non-trivial primitive is JPEG decode + raw pixel access.
 
-### 5.2 The two viable answers
+> **This analysis is the part that aged best, and it is *why* the static refactor was even
+> possible.** Because the workload is milliseconds of 1-D math, moving it from a server to
+> the browser cost nothing in user-perceived latency — and removed an entire backend.
+> The browser's own `createImageBitmap` + canvas turned out to be a perfectly good decoder,
+> so `sharp` was not needed at runtime after all.
 
-| | **A. Node/Next.js backend** (recommended) | **B. Python microservice** |
+### 5.2 The two options considered *(at the time: server-side)*
+
+| | **A. Node/Next.js backend** (chosen then) | **B. Python microservice** |
 |---|---|---|
 | Image decode / pixels | `sharp` → raw `Buffer` of RGB | Pillow / OpenCV / NumPy |
-| Math | TypeScript port of existing Dart (near 1:1) | NumPy / SciPy (`scipy.signal.find_peaks`) |
-| Latency | **In-process** — no network hop | Extra HTTP/IPC hop per photo |
-| Deploy | **One service, one language** | Two services to build, deploy, monitor |
-| Library richness | Sufficient for *this* workload | Richest scientific ecosystem |
-| When it wins | Now — simple math, lowest latency | If processing later grows heavy (curve fitting, deconvolution, ML) |
+| Math | TypeScript port of the Dart (near 1:1) | NumPy / SciPy |
+| Latency | In-process — no network hop | Extra HTTP/IPC hop per photo |
+| Deploy | One service, one language | Two services |
+| When it wins | Simple math, lowest latency | If processing grows heavy |
 
-### 5.3 Recommendation
+**Outcome:** option A was built, then superseded by a third option that wasn't on this
+list — **run it in the browser**, which is in-process *and* serverless. `sharp` remains
+only as a test-time decoder.
 
-**Do the processing in the Next.js backend (Route Handlers / server actions) using `sharp` for decode and a TypeScript port of the existing Dart algorithms.** Reasons:
+### 5.3 Design for a swap
 
-1. The math is small and already written — porting Dart → TS is nearly mechanical (same formulas, same structure).
-2. **One runtime, one deploy, lowest latency** — no Python handoff, which is exactly the slowdown you were worried about.
-3. `sharp` covers the only "hard" part (fast JPEG decode + raw pixel buffer). We do **not** need NumPy/SciPy for column averages and two line fits.
+Put the core behind a single module boundary. See §A.2 — this is the decision that still holds.
 
-**But design for a swap.** Put the core behind a single module boundary (`analysis/` with one entry function per operation). If a future experiment mode needs heavy science (multi-peak Gaussian fitting, baseline correction, chemometrics), the same interface can be re-implemented as a **Python FastAPI sidecar** without touching the UI. The boundary is the insurance policy; we don't pay for it now.
+## 6. Technology stack *(as planned; see CLAUDE.md for what shipped)*
 
-> Net: **Node now, Python optional later, behind the same seam.** This directly answers the latency-vs-libraries trade-off in favour of latency, because the libraries we'd gain aren't needed yet.
-
----
-
-## 6. Technology stack
-
-| Layer | Choice | Why |
+| Layer | Planned | Shipped |
 |---|---|---|
-| Web framework | **Next.js (React)** | Per your direction; SSR + Route Handlers give us the backend in the same project |
-| Phone client | **Existing native Flutter app**, stripped to camera role | Keeps hardware **focus/exposure lock**; reuses proven camera code; in-app QR scan / deep link to join |
-| Image decode | **`sharp`** (Node, libvips) | Fast native JPEG decode + raw pixel access |
-| Analysis core | **TypeScript port** of Dart algorithms | Single source of truth, swappable to Python |
-| Charts | **Recharts / visx / Plotly** (TBD) | Replace `fl_chart` line + scatter |
-| Realtime | **SSE** to start (see §4.2) | Simple, fits "laptop drives" |
-| Persistence | TBD — see [§9](#9-persistence) | Session store |
-| Export | CSV via browser download + Web Share API | Replaces `csv` + `share_plus` |
-| *(optional later)* Heavy science | **Python FastAPI** sidecar | Only if a mode needs it |
+| Web framework | Next.js (React) | Next.js 16, `output: "export"` (static) |
+| Phone client | Flutter app, camera role | **none** — file upload in the browser |
+| Image decode | `sharp` (Node) | `createImageBitmap` + canvas; `sharp` is test-only |
+| Analysis core | TypeScript port | same |
+| Charts | Recharts / visx / Plotly (TBD) | **Recharts** |
+| Realtime | SSE | **none** |
+| Persistence | TBD (§9) | **IndexedDB** in the browser |
+| Export | CSV download + Web Share | CSV download + `.spectro.zip` bundle |
+| Heavy science later | Python FastAPI sidecar | not needed |
 
----
-
-## 7. Data model (port of the Dart models)
-
-The Dart models in `project.dart` translate directly to TypeScript types. A **Session** is the web analogue of **Project**, with pairing/step-control fields added.
+## 7. Data model (as sketched) *(see §A.6 for the divergences)*
 
 ```ts
 type WorkflowStep =
-  | 'experimentSetup'   // NEW: mode + light type
-  | 'cameraRoiSetup'    // was 'setup'
-  | 'calibration'
-  | 'blank'             // split out of 'references'
-  | 'standards'         // split out of 'references'
-  | 'absorbanceReview'  // was interstitial
-  | 'unknown'
-  | 'results';
+  | 'experimentSetup' | 'cameraRoiSetup' | 'calibration' | 'blank'
+  | 'standards' | 'absorbanceReview' | 'unknown' | 'results';
 
 interface Session {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-
-  // NEW up-front choices
-  mode: ExperimentMode;        // e.g. 'beerLambert'
-  lightType: ReferenceLight;   // e.g. 'fluorescent' → selects lamp peak set
-
+  id: string; name: string; createdAt: string; updatedAt: string;
+  mode: ExperimentMode; lightType: ReferenceLight;
   currentStep: WorkflowStep;
-  pendingCapture: CaptureRequest | null;  // drives the phone
-
-  roi: Rect | null;            // {left, top, width, height} in image coords
+  pendingCapture: CaptureRequest | null;  // drives the phone — DROPPED
+  roi: Rect | null;
   calibration: Calibration | null;
   calibrationImage: SpectralImage | null;
-  blankImage: SpectralImage | null;        // I₀
+  blankImage: SpectralImage | null;
   standards: StandardMeasurement[];
   unknowns: UnknownResult[];
 }
-
-interface DataPoint { x: number; y: number; }
-interface IntensityProfile { points: DataPoint[]; }
-interface CalibrationPeak { pixelPosition: number; knownWavelength: number; }
-interface Calibration { slope: number; intercept: number; rSquared: number; peaks: CalibrationPeak[]; }
-interface SpectralImage { id: string; url: string; capturedAt: string; intensityProfile?: IntensityProfile; }
-interface AbsorbanceSpectrum { points: DataPoint[]; lambdaMax?: number; absorbanceAtLambdaMax?: number; }
-interface StandardMeasurement { concentration: number; unit: string; image: SpectralImage; absorbanceSpectrum?: AbsorbanceSpectrum; }
-interface UnknownResult { image: SpectralImage; absorbanceSpectrum?: AbsorbanceSpectrum; absorbanceAtLambdaMax?: number; determinedConcentration?: number; }
-// CalibrationCurve stays computed-in-memory, not persisted (as today).
 ```
 
-> **New vs today:** `mode`, `lightType`, `pendingCapture`, and the split of `references` into `blank`/`standards` steps. `roi` becomes `{left, top, width, height}` (no Flutter `Rect`). The default-ROI fallback (`0,0,9999,9999` → clamped to image size) is preserved for pre-cropped strips.
+## 8. Core algorithms to port
 
----
+*(Fully superseded by §A.4, which states the current values. Three of the constants here are
+now wrong — `minSep`, the brightness-based peak choice, and the expected slope figure.)*
 
-## 8. Core algorithms to port (source of truth)
+## 9. Persistence *(superseded)*
 
-These must be ported **faithfully** — the constants and formulas are load-bearing. (Values from `CLAUDE.md` and the Dart source.)
+Because the session had to be reachable by **two devices**, it needed a server-side store —
+options weighed were in-memory, SQLite/Postgres + blob storage, or Supabase/Firebase.
+Postgres + Prisma + a disk blob store was built.
 
-### 8.1 Gamma linearisation (per channel, applied before any averaging)
-```
-norm = c8bit / 255
-if norm ≤ 0.04045:  linear = norm / 12.92
-else:               linear = ((norm + 0.055) / 1.055) ^ 2.4
-return linear * 255
-```
-On by default. Off only for debugging.
+**With one device, the constraint vanished.** Persistence is now IndexedDB (`experiments`
+JSON + `blobs` binaries), and portability is a user-driven `.spectro.zip` export/import
+instead of a server.
 
-### 8.2 Intensity profile (ROI → 1-D), two modes
-- **Luminance** (default): `0.299R + 0.587G + 0.114B` — for blank, standards, unknown.
-- **Max-channel**: `max(R,G,B)` — **calibration lamp only** (keeps blue lamp lines detectable).
-- Average down each ROI column → `DataPoint(x = column index, y = mean intensity)`.
-- Clamp ROI to actual image size.
-
-### 8.3 Saturation
-- A pixel is saturated if **any** channel ≥ **250**. Return `{saturatedCount, totalCount, fraction, isSaturated}`. Warn after every capture.
-
-### 8.4 Calibration peak detection (load-bearing constants)
-- Smoothing window = **15** (`calibrationSmoothingWindow`), vs **5** default.
-- Minimum peak separation = `profile.length / 15` (≈40 px on a 550 px image).
-- Detect 5 peaks → map to lamp lines `[434.5, 486.0, 544.0, 587.0, 611.5]` nm → OLS fit `λ = slope·px + intercept`.
-- **Expected (550 px sample):** slope ≈ 0.59 nm/px, intercept ≈ 397 nm, R² > 0.999; peaks at px ≈ 61, 153, 249, 316, 365.
-
-### 8.5 Absorbance, λmax, Beer-Lambert curve
-- Per pixel: `A(λ) = −log₁₀(I/I₀)` against the blank; map pixel → λ via calibration. (Guard I₀ = 0.)
-- λmax = wavelength of max A from the highest-concentration standard; user-adjustable by tapping the chart.
-- Beer-Lambert: OLS of `A@λmax` vs concentration across standards → `A = m·c + b`; back-calc unknown `c = (A − b)/m`.
-
-> **Recommended: a golden-data regression test.** Run the existing sample 550-px dataset through the TS port and assert the expected slope/intercept/peaks above, so the port is provably faithful to the Dart original.
-
----
-
-## 9. Persistence
-
-The current app uses Hive (local). On the web, the session must be reachable by **two devices**, so it needs a **server-side store**. Options (decide in design):
-
-| Option | Fit |
-|---|---|
-| **In-memory + object storage for images** | Simplest for a classroom/demo; sessions are ephemeral |
-| **SQLite / Postgres** + blob store (S3/local disk) | Durable; supports saved experiments and history |
-| **Supabase / Firebase** | Bundles DB + storage + realtime (pairs with §4.2 managed-realtime) |
-
-Images are the bulk of the data — store **files in object/blob storage**, keep only URLs + extracted profiles in the session record (mirrors today's `SpectralImage.filePath` + `intensityProfile`).
-
----
-
-## 10. API surface (illustrative)
+## 10. API surface *(superseded — all of these were deleted)*
 
 ```
-POST   /api/sessions                      → create session {id, joinToken, mode, lightType}
-GET    /api/sessions/:id                   → full session state (laptop hydrate)
-GET    /api/sessions/:id/events            → SSE stream of state/prompts (both devices)
-POST   /api/sessions/:id/join              → native app joins with token (from in-app QR scan)
-POST   /api/sessions/:id/step              → laptop advances step / sets pendingCapture
-POST   /api/sessions/:id/captures          → phone multipart image upload → triggers core
-                                             → returns/streams extracted profile + warnings
-POST   /api/sessions/:id/roi               → set ROI, re-extract affected profiles
-POST   /api/sessions/:id/lambda-max        → adjust λmax, rebuild curve
-GET    /api/sessions/:id/export.csv        → results CSV
+POST   /api/sessions                      → create session
+GET    /api/sessions/:id                  → full session state
+GET    /api/sessions/:id/events           → SSE stream
+POST   /api/sessions/:id/join             → native app joins with token
+POST   /api/sessions/:id/step             → advance step / set pendingCapture
+POST   /api/sessions/:id/captures         → phone multipart image upload
+POST   /api/sessions/:id/roi              → set ROI, re-extract
+POST   /api/sessions/:id/lambda-max       → adjust λmax, rebuild curve
+GET    /api/sessions/:id/export.csv       → results CSV
 ```
 
-The **core** ([§5](#5-key-decision-where-does-image-processing-run)) is invoked inside `POST /captures`, `/roi`, and `/lambda-max` — all in-process (Node) for now.
+Each has a direct client-side descendant: `createExperiment`, `readExperiment`,
+*(none — no realtime)*, *(none — no pairing)*, `goToStep`, `persistCapture`,
+`persistReextract`, `setLambdaMax`, `downloadResultsCsv`.
 
----
+## 11. Phased roadmap *(historical)*
 
-## 11. Phased implementation roadmap
+1. **Core port + tests** — done, and still the foundation.
+2. **Session + pairing** — built, then deleted.
+3. **Capture loop** — built as upload-over-HTTP, then rebuilt in-browser.
+4. **Guided wizard** — done, and still the shape of the app.
+5. **Results & export** — done, plus a full report page and zip bundle.
+6. **Polish** — reconnect handling was moot after the refactor.
+7. *(Optional)* **Python sidecar** — never needed.
 
-1. **Core port + tests** — TS port of §8 with `sharp`; golden-data regression test against the 550-px sample. *(De-risks the science first; no UI.)*
-2. **Session + pairing** — create session, QR (id+token), SSE channel; add in-app QR scanner + join flow to the native app so it connects and shows "connected".
-3. **Capture loop** — laptop requests a capture → phone shutter → multipart upload → core extracts profile → laptop renders spectrum. Saturation warning.
-4. **Guided wizard** — experiment-mode + light-type setup, ROI-on-web, calibration, blank, standards, absorbance review (λmax tap), unknown, results. Port `info_card` explanations.
-5. **Results & export** — charts, data table, CSV download, Web Share.
-6. **Polish** — phone-app reconnect handling, error states, multi-session, saved history.
-7. *(Optional)* **Python sidecar** — only if a new experiment mode needs heavy science.
+## 12. Open design questions *(all resolved or moot)*
 
----
+1. **Realtime transport** — moot, no realtime.
+2. **Persistence** — resolved: IndexedDB, per-browser, with zip export.
+3. **Auth / ownership** — resolved: no auth at all; data never leaves the browser.
+4. **Native-app refactor scope** — moot; `mobile/` was deleted entirely.
+5. **Experiment modes** — resolved: two shipped, `beerLambert` and `fluorescence`.
+6. **Reference light types** — resolved: `fluorescent` (5-line lamp) and `laser` (3 user-set lines), paired 1:1 with the mode.
+7. **Charts library** — resolved: Recharts.
+8. **Native app: strip vs fork** — moot.
+9. **Hosting** — resolved: static nginx image deployed by deployd (see CLAUDE.md).
 
-## 12. Open design questions
+## 13. Summary of decisions made at the time
 
-1. **Realtime transport** — SSE (recommended) vs WebSocket vs managed (Supabase/Pusher)? Affects hosting.
-2. **Persistence** — ephemeral in-memory vs durable DB? Do students need to revisit past experiments?
-3. **Auth / ownership** — anonymous sessions (QR is the only key) vs student logins? Token lifetime & re-pairing.
-4. **Native-app refactor scope** — how much of the existing Flutter app to keep? Minimum is: home/session-join screen, QR scanner, the camera + focus-lock screen, and upload. The on-phone workflow, calibration, analysis, ROI, and results screens become dead code (remove vs hide). Focus/exposure lock is **retained** — that was the reason for keeping the native app.
-5. **Experiment modes** — what is the initial set beyond Beer-Lambert? Each mode defines its lamp peak set, units, expected ranges, and explanation copy.
-6. **Reference light types** — fluorescent (current 5-peak set) plus others? Each needs its own known-peak table.
-7. **Charts library** — Recharts vs visx vs Plotly (interactivity for λmax tapping).
-8. **Native app: strip vs fork** — turn the existing Flutter app into the camera client in place, or fork a lean "Spectro Capture" app and keep the full app as an offline fallback? (This plan assumes the native app is repurposed to the camera role and the web app becomes primary for analysis.)
-9. **Hosting** — the repo already has GitLab CI/CD + webhook deploy; align the web app's deploy with it.
-
----
-
-## 13. Summary of decisions already made
-
-- **Phone = existing native Flutter app, stripped to a camera role** (in-app QR scan → join → focus/exposure lock → capture → upload). **Focus/exposure lock retained** — no web browser is used for photos.
-- **Web = Next.js (React)**, front-end **and** backend in one project.
-- **Image processing = Next.js backend (Node + `sharp`)** with a TypeScript port of the existing Dart algorithms — chosen for **lowest latency and one runtime**, behind a swappable seam so a **Python FastAPI** core can replace it later if the science gets heavy.
-- **Science is preserved, not re-derived** — algorithms and constants in §8 are ported faithfully and pinned with a golden-data test.
+- Phone = native Flutter app in a camera role, focus/exposure lock retained. **← reversed**
+- Web = Next.js, front-end **and** backend in one project. **← reversed (front-end only)**
+- Image processing = Next.js backend (Node + `sharp`), behind a swappable seam. **← the seam held; the location moved to the browser**
+- Science is preserved, not re-derived, and pinned with a golden-data test. **← still true**

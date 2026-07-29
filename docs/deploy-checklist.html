@@ -67,7 +67,7 @@
 <body>
 <main>
   <header><div class="mark"></div><h1>Spectro Web — Deployment Checklist</h1></header>
-  <p class="sub">Password-auth web app shipped via the tag&nbsp;→&nbsp;GitLab&nbsp;CI&nbsp;→&nbsp;webhook&nbsp;→&nbsp;server pipeline. Your ticks are saved in this browser.</p>
+  <p class="sub">Fully static site shipped via <b>deployd</b>: tag&nbsp;→&nbsp;GitLab&nbsp;CI&nbsp;→&nbsp;deployd&nbsp;→&nbsp;traefik. No database, no env, no persistent data. Your ticks are saved in this browser.</p>
 
   <div class="bar"><i id="barFill"></i></div>
   <p class="progress-label" id="progressLabel">0 of 0 done</p>
@@ -79,72 +79,88 @@
 </main>
 
 <script>
-const PLACEHOLDERS = "Replace &lt;group&gt;, the domain, the SSH target and the deploy path with your real values.";
-const DEPLOY_DIR = "~/containers/spectro-app";
+const APP = "spectro-app";
+const DOMAIN = "spectro.muzoo.io";
+const VM = "mabelz";   // ssh alias of the deployd VM
 
 const DATA = [
   {
-    title: "1 · GitLab CI/CD variables",
-    tag: "gitlab", tagText: "GitLab UI",
-    hint: "Settings → CI/CD → Variables (mask them). These are unchanged from the old pipeline — verify they still exist.",
+    title: "0 · Before you start",
+    tag: "once", tagText: "context",
+    hint: "This app is a FULLY STATIC site — nginx serving a Next.js `output: export` bundle. No database, no app server, no API routes, no env vars, no persistent volume: all data and compute live in each user's browser (IndexedDB). Anything asking you for POSTGRES_*, AUTH_SECRET or an SMTP server is from the retired server era — it does not apply.",
     items: [
-      { t: "DEPLOY_WEBHOOK_SECRET — HMAC secret shared with the webhook server", d: "Must match the secret the webhook-deploy receiver verifies." },
-      { t: "DEPLOY_WEBHOOK_URL — full webhook endpoint URL", d: "e.g. https://hooks.example.com/hooks/spectro-app-deploy" },
+      { t: "deployd is the deploy controller — not a webhook script you maintain", d: "It manages the GitLab project webhook itself, verifies the tag + green pipeline + registry image via the GitLab API, then pulls docker-compose.prod.yml at that tag and deploys. The old docker/ folder, HMAC webhook job and cron-deploy.sh are all retired." },
+      { t: "Confirm the deployd instance is ≥ v0.6.1", d: "Required for the injected-variable style this repo uses (compose pins image: …:${DEPLOYD_TAG} from the generated .deployd.env). The version is shown on deployd's /login page." },
+      { t: "Prefer the /deployd skill for onboarding, deploys, rollbacks and status", d: "It talks to the deployd API directly. Needs DEPLOYD_URL + DEPLOYD_TOKEN in ~/.claude/skills/deployd/.env." },
     ],
   },
   {
-    title: "2 · Server — one-time prep",
+    title: "1 · CI — nothing to configure",
+    tag: "gitlab", tagText: "GitLab",
+    hint: ".gitlab-ci.yml is self-contained and uses only GitLab's predefined registry variables. Do NOT add deploy jobs, webhook URLs or secrets to it.",
+    items: [
+      { t: "Verify no stale CI/CD variables remain", d: "Settings → CI/CD → Variables. DEPLOY_WEBHOOK_SECRET and DEPLOY_WEBHOOK_URL belonged to the retired webhook flow — delete them if still present." },
+      { t: "Confirm the build job only builds + pushes", d: "One `build-and-push` job on tags matching /^v\\d+\\.\\d+\\.\\d+$/, context = repo ROOT, pushing $CI_REGISTRY_IMAGE:vX.Y.Z (+ :latest for layer cache).",
+        cmd: "grep -A4 'rules:' .gitlab-ci.yml" },
+      { t: "Check APP_VERSION reaches the bundle", d: "CI passes --build-arg APP_VERSION=$CI_COMMIT_TAG → NEXT_PUBLIC_APP_VERSION → the corner VersionBadge. A deployed page showing 'dev' means the arg was lost." },
+    ],
+  },
+  {
+    title: "2 · One-time onboarding (already done for " + APP + ")",
     tag: "once", tagText: "one-time",
-    hint: "Run on the server unless noted. Assumes Docker + the Compose plugin, and nginx-proxy + acme-companion already running.",
+    hint: "Only needed when onboarding a NEW app, or re-onboarding after a rebuild. " + APP + " has been onboarded since 2026-07-22 (domain " + DOMAIN + ", app_port 80).",
     items: [
-      { t: "Point DNS at the server", d: "Add an A record: spectro.yourdomain.com → server IP." },
-      { t: "Note your nginx-proxy container name", d: "compose does NOT manage the proxy. Set PROXY_CONTAINER in .env to your nginx-proxy CONTAINER name so each redeploy re-attaches the proxy to the app's (recreated) network.",
-        cmd: "docker ps --format '{{.Names}}' | grep -i nginx" },
-      { t: "Create the deploy directory (the rsync target)", cmd: "mkdir -p " + DEPLOY_DIR },
-      { t: "Log in to the GitLab Container Registry", d: "So the cron poller can pull the private image. Use a read-only deploy token.",
-        cmd: "docker login registry.gitlab.com" },
-      { t: "Sync the docker/ folder to the server", d: "Run from your machine, at the repo root. --exclude '.env' keeps the server-managed secrets file from being overwritten.",
-        cmd: "rsync -av --exclude='.env' docker/ user@server:" + DEPLOY_DIR + "/" },
-      { t: "Create the server .env from the example", cmd: "cp " + DEPLOY_DIR + "/.env.example " + DEPLOY_DIR + "/.env" },
-      { t: "Generate AUTH_SECRET and fill in .env", d: "Set POSTGRES_*, DATABASE_URL (host = db), AUTH_SECRET (below), AUTH_URL=https://your-domain, EMAIL_SERVER/EMAIL_FROM (real SMTP — needed for password reset), VIRTUAL_HOST, LETSENCRYPT_HOST, SPECTRO_APP_IMAGE.",
-        cmd: "openssl rand -base64 33   # paste as AUTH_SECRET\nnano " + DEPLOY_DIR + "/.env" },
-      { t: "Install the cron deploy poller", d: "Polls the webhook trigger file every minute and runs compose up on a new tag. Add the line to your crontab.",
-        cmd: "( crontab -l 2>/dev/null; echo '* * * * * " + DEPLOY_DIR + "/cron-deploy.sh' ) | crontab -" },
+      { t: "Point DNS at the deployd VM", d: "A record: " + DOMAIN + " → the VM's IP. If the domain is proxied through Cloudflare, use Full (strict) mode — traefik terminates TLS with a Let's Encrypt cert." },
+      { t: "Register the app in deployd", d: "Slug + repo + domain + app_port 80 (nginx in the container). No data mounts — the app has no persistent state." },
+      { t: "Give deployd a GitLab token with API + registry read", d: "deployd stores its OWN per-app copy of this token. Note the expiry: when it lapses, webhook pokes fail SILENTLY (no deploy row appears) and manual deploys 401. Fixing it is admin-only in the deployd UI (app → settings)." },
+      { t: "Let deployd create the project webhook", d: "Do not hand-create one — deployd manages it." },
     ],
   },
   {
-    title: "3 · First deploy & verify",
+    title: "3 · Cut a release",
     tag: "repeat", tagText: "release",
-    hint: "Either push a tag (triggers CI end-to-end) or start it once by hand.",
+    hint: "The whole release is one tag push. Run the gates first — per the project conventions, typecheck + tests must pass, plus a build for build-affecting changes and a CVE scan before committing.",
     items: [
-      { t: "Cut a release tag (from your machine)", d: "Triggers GitLab: build + push image → webhook → server cron pulls + deploys. Migrations run automatically on app boot.",
-        cmd: "git push origin main\ngit tag v1.0.0\ngit push origin v1.0.0" },
-      { t: "…or start it once manually on the server", d: "Useful for the very first boot before any tag exists (set SPECTRO_APP_IMAGE in .env first).",
-        cmd: "cd " + DEPLOY_DIR + " && docker compose --env-file .env up -d" },
-      { t: "Connect your nginx-proxy container to the app's network", d: "Only needed for a manual first boot — cron-deploy.sh re-attaches automatically each release when PROXY_CONTAINER is set. Replace nginx-proxy with your container name; the network is <deploy-dir>_default.",
-        cmd: "docker network connect $(basename " + DEPLOY_DIR + ")_default nginx-proxy" },
-      { t: "Check the containers and logs", d: "Expect the app log to show 'migrate deploy' then 'Ready', and db healthy.",
-        cmd: "cd " + DEPLOY_DIR + " && docker compose ps\ndocker compose logs -f app" },
-      { t: "Register an account in the browser", d: "Open https://your-domain/register — you should be signed straight in." },
-      { t: "Test password reset", d: "Use /forgot-password and confirm the reset email arrives at your SMTP inbox." },
+      { t: "Run the pre-commit gates", cmd: "cd web && npm run typecheck && npm test && npm run build" },
+      { t: "Run the CVE scan", d: "Two findings are known and ACCEPTED (next-internal pins: postcss@8.4.31 and a nested optional sharp) — do not try to 'fix' them.",
+        cmd: "trivy fs --scanners vuln --severity HIGH,CRITICAL web" },
+      { t: "Bump web/package.json version + commit", d: "Convention: chore(release): vX.Y.Z. Keep CLAUDE.md updated in the same commit when architecture or domain knowledge changed.",
+        cmd: "git add -A && git commit -m 'chore(release): vX.Y.Z'" },
+      { t: "Push main, then the tag", d: "The tag is what triggers everything: CI builds + pushes the image, deployd's webhook fires, deployd verifies tag + green pipeline + registry image, then deploys.",
+        cmd: "git push origin main\ngit tag vX.Y.Z\ngit push origin vX.Y.Z" },
+      { t: "Watch the pipeline go green", d: "deployd will not deploy a tag whose pipeline is not green — it verifies via the GitLab API." },
+      { t: "Confirm deployd created a deploy row", d: "No row at all usually means the webhook poke failed — most often deployd's stored GitLab token has expired (see §2)." },
     ],
   },
   {
-    title: "4 · Maintenance",
-    tag: "repeat", tagText: "ongoing",
-    hint: "Data lives in two host bind-mount dirs (POSTGRES_DATA_DIR + UPLOADS_DIR, default ./pgdata + ./uploads in the deploy dir). Back them up regularly.",
+    title: "4 · Verify the deploy",
+    tag: "repeat", tagText: "each release",
+    hint: "Check container HEALTH first. traefik silently skips unhealthy containers — no router, no cert, no log line at the default level — which surfaces to the user as a TLS error, not an app error.",
     items: [
-      { t: "Back up the database (consistent dump while running)", d: "Replace spectro/spectro with your POSTGRES_USER / POSTGRES_DB.",
-        cmd: "cd " + DEPLOY_DIR + " && docker compose exec -T db \\\n  pg_dump -U spectro spectro | gzip > db-$(date +%F).sql.gz" },
-      { t: "Back up the uploaded images", d: "Plain tar of the host uploads dir.",
-        cmd: "tar czf uploads-$(date +%F).tar.gz -C " + DEPLOY_DIR + " uploads" },
-      { t: "Roll out an update", d: "Just push a higher vX.Y.Z tag — cron-deploy.sh only deploys strictly greater versions.",
-        cmd: "git tag v1.0.1 && git push origin v1.0.1" },
+      { t: "Check health BEFORE anything else", d: "Anything other than 'healthy' explains a TLS/502 symptom on its own. The healthcheck probes 127.0.0.1 deliberately, not localhost: busybox wget resolves localhost to ::1 first while nginx binds IPv4 only, so a localhost probe is refused and the container is marked unhealthy.",
+        cmd: "ssh " + VM + " \"docker inspect " + APP + "-app-1 --format '{{.State.Health.Status}}'\"" },
+      { t: "Confirm the running image is the tag you just pushed",
+        cmd: "ssh " + VM + " \"docker inspect " + APP + "-app-1 --format '{{.Config.Image}}'\"" },
+      { t: "Load the site over HTTPS", cmd: "curl -sI https://" + DOMAIN + "/ | head -1" },
+      { t: "Check the version badge matches the tag", d: "Bottom-right corner of any page. 'dev' means APP_VERSION never reached the build." },
+      { t: "Smoke-test the actual workflow in a real browser", d: "The one thing no test covers: IndexedDB + the file picker. Create an experiment → upload the lamp → calibrate → blank → standards → unknown → report → export .spectro.zip → re-import it." },
+      { t: "If Cloudflare shows 526", d: "That is traefik serving its default cert — almost always an unhealthy container (see the first item), not a certificate problem. Cloudflare masks the origin, so external probes cannot tell DNS, traefik and app failures apart; check on the VM." },
+    ],
+  },
+  {
+    title: "5 · Rollback & maintenance",
+    tag: "repeat", tagText: "ongoing",
+    hint: "There is nothing to back up on the server — no database, no uploads, no volumes. A user's data lives only in their own browser, so the app's only 'backup' story is the student-facing .spectro.zip export on the experiments list page.",
+    items: [
+      { t: "Roll back to a previous tag", d: "Redeploy an earlier vX.Y.Z through deployd (UI or the /deployd skill). Because the image is pinned by ${DEPLOYD_TAG}, a rollback is just a redeploy of the older tag." },
+      { t: "Never roll back by deleting a tag", d: "deployd verifies the tag against the GitLab API; removing it breaks the audit trail without changing what is running." },
+      { t: "Keep dependencies patched", d: "Re-run the CVE scan periodically and bump next / sharp when advisories land; each bump is a normal release through §3." },
+      { t: "Remind users that data is per-browser", d: "Clearing site data wipes an experiment permanently. Exporting is the only backup — there is no server copy to restore from." },
     ],
   },
 ];
 
-const KEY = "spectro-deploy-checklist-v1";
+const KEY = "spectro-deploy-checklist-v2";
 const state = JSON.parse(localStorage.getItem(KEY) || "{}");
 
 function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }

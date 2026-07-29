@@ -1,7 +1,10 @@
 /**
- * Placeholder canvas for the wizard steps not yet built (blank, standards,
- * absorbance review, unknown, results). The capture pipeline and shell already
- * support them; the step-specific charts/tables land next.
+ * Fallback canvas for a wizard step with no dedicated component.
+ *
+ * All 6 wizard steps are now built, so this is effectively unreachable for real
+ * rows — it survives as the `default` arm of the step switch in
+ * `app/experiment/page.tsx`, i.e. the safety net if a new `WorkflowStep` is added
+ * to the union before its canvas exists.
  */
 import { Icon } from "@/components/ui/primitives";
 

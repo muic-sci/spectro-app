@@ -229,7 +229,8 @@ export const WORKFLOW_STEPS: StepMeta[] = [
 
 /**
  * The wizard rail steps — every step *after* the up-front setup (which happens
- * on L1 before pairing). These are the 7 steps shown in the L3 step rail.
+ * on the L1 setup form, before the wizard). These are the 6 steps shown in the
+ * L3 step rail (see docs/web-ux-brief.md §3).
  */
 export const WIZARD_STEPS: StepMeta[] = WORKFLOW_STEPS.filter(
   (s) => s.value !== "experimentSetup",

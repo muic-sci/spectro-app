@@ -1,6 +1,8 @@
 # Spectro Web — fully static site (Next.js `output: export`) served by nginx.
-# Built by the deployd shared CI include with context = repo ROOT (`docker build .`);
-# only web/ enters the build context (see .dockerignore). There is no app server,
+# Built by the self-contained `build-and-push` job in .gitlab-ci.yml with context =
+# repo ROOT (`docker build .`); only web/ enters the build context (see
+# .dockerignore). (The shared muzoo/deployd CI include was retired in v3.4.3 —
+# this repo owns its whole CI side.) There is no app server,
 # database or API: `next build` emits a static `out/` (HTML/JS/CSS) that runs
 # entirely in the browser. The runtime image is just nginx serving those files.
 

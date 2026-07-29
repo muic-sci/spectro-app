@@ -3,7 +3,7 @@
 > **Maintenance rule**: Keep this file up to date whenever significant changes are made — especially to domain knowledge, the data model, workflow steps, or architectural decisions. If you change how absorbance is computed, how calibration works, what a step does, or what a stored field means, update the relevant section here before finishing the task.
 
 ## What This Is
-An educational spectrophotometer companion for the **Lego Spectrophotometer** (see `materials/`) — teaching Beer-Lambert quantitation, replacing the manual ImageJ workflow from the reference paper.
+An educational spectrophotometer companion for the **Lego Spectrophotometer** — teaching Beer-Lambert quantitation, replacing the manual ImageJ workflow from the reference paper. (The paper + sample dataset live in `materials/`, which is **gitignored and local-only**, so a fresh clone won't have it; the golden test doesn't need it — see the layout below.)
 
 **The product is now a fully static, in-browser web app (`web/`).** The user opens a static site (HTML/JS/CSS — no account, no server), uploads photos of the spectrum strip, and every step — decode, ROI extraction, wavelength calibration, absorbance/fluorescence, the calibration curve, the report and CSV — runs **entirely in their browser**. Experiments + image binaries persist in the browser's **IndexedDB**; nothing is uploaded anywhere.
 
@@ -14,17 +14,39 @@ An educational spectrophotometer companion for the **Lego Spectrophotometer** (s
 spectro-app/
 ├── web/          # Spectro Web — a fully static Next.js 16 app (output: export).
 │                 # Guidance, ROI, charts, analysis, results, export — all client-side.
-├── docs/         # web-refactor-plan.md, web-ux-brief.md, design_handoff_continuous_camera/
-├── materials/    # reference paper + the 002 sample dataset (golden test source)
+├── docs/         # see "docs — what's live vs historical" below
+├── materials/    # reference paper + the 002 sample dataset. GITIGNORED, local-only
+│                 # (scrubbed from git history); the golden test uses its own tracked
+│                 # copy at web/test/fixtures/spectro-002, not this folder.
+├── paper/        # J. Chem. Educ. manuscript draft — tracked ONLY on branch `paper-draft`
+│                 # (never merged). On main only the gitignored paper/resources/ exists.
 └── Dockerfile, docker-compose.prod.yml, .gitlab-ci.yml
                   # deployd: CI builds the static image on vX.Y.Z tags; deployd deploys it
 ```
+
+### docs — what's live vs historical
+The two planning documents were written for the **retired two-device architecture** (laptop
+brain + paired phone camera + server). Both have been re-framed rather than deleted, because
+parts are still load-bearing — read the status banner at the top of each before trusting it:
+- **`docs/web-ux-brief.md`** — **partly live.** Its §5 is the cited source of the per-step
+  guidance copy (`STEP_GUIDANCE` in `experiment-meta.ts`), and its **L3.x screen IDs are the
+  step names used throughout this file**. The phone screens (P0–P6) and QR pairing are
+  quarantined in its Appendix H.
+- **`docs/web-refactor-plan.md`** — **historical ADR.** Its §A collects the decisions that
+  still hold (the science port, the module seam, the golden test, the load-bearing constants);
+  §B records why the two-device design was dropped. Everything below §B is superseded — note
+  its §8 constants are outdated, and this file is authoritative where they disagree.
+- **`docs/design_handoff_continuous_camera/`** — **never implemented**, kept for two reasons:
+  it is the origin of the live OKLCH palette/tokens, and it is the only complete spec of the
+  exposure-lock problem (which the current app does not solve — see the note under *Capture flow*).
+- **`docs/deploy-checklist.html`** — live, interactive deployd release checklist (ticks persist
+  in localStorage).
 
 ## web — the app
 
 ### Stack
 - **Next.js 16** (App Router) with **`output: "export"`** → a static `out/` bundle (no Node server, no API routes, no server actions). React 19, TypeScript, Tailwind v4 + **HeroUI v3**, **Recharts**, **Vitest**.
-- **No backend at all:** no Prisma/Postgres, no Auth.js, no SSE, no `sharp` at runtime, no `server-only` modules. `sharp` remains a **devDependency** used only by the Node golden/orientation tests.
+- **No backend at all:** no Prisma/Postgres, no Auth.js, no SSE, no `sharp` at runtime, no `server-only` modules. `sharp` remains a **devDependency** used only as a Node-side test decoder, by `analysis.golden.test.ts`, `orientation.test.ts` and `flip.test.ts`.
 - **Theme = the "middle ground":** HeroUI components re-skinned by overriding HeroUI's semantic CSS tokens (`--background`, `--surface`, `--accent`, …) with the design handoff's dark OKLCH palette in `web/src/app/globals.css`; the signature scientific bits (logo, spectrum bar, StatusChip, Readout) are ported primitives in `web/src/components/ui/primitives.tsx`. Dark-only (`.dark` always on `<html>`) — an experimental requirement (stray light contaminates the measurement). The **report** has its own light/dark toggle and always prints on white.
 
 ### Storage — browser IndexedDB (`web/src/lib/store/`)
@@ -39,7 +61,7 @@ There is no database; the store layer replaces the old Prisma data layer + disk 
 
 ### Analysis core (`web/src/lib/analysis/`)
 A faithful TS port of the original Dart core, behind one module seam. Pure functions (`math`/`image`/`calibration`/`absorbance`) with **no native deps** — unit/golden tested directly. Decoding happens in the **browser**: `analysis/decode.client.ts` (`decodeImageBrowser`: `createImageBitmap({imageOrientation:"from-image"})` → canvas `getImageData` → the RGB `RasterImage` the pure core consumes). There is **no server-side decoder** — `analysis-client.ts` orchestrates decode + extract + calibrate + crop in the browser.
-- **Golden test:** `web/test/analysis.golden.test.ts` decodes the `materials/002` fixture with **sharp** (a devDependency, Node-only) to pin the decoder-robust science: lamp slope≈0.582 nm/px, intercept≈397.9, **R²≈0.9998**, peaks≈[63,151,254,325,366]; blue-dye λmax≈627 nm; Beer-Lambert R²>0.99. The browser decode differs from sharp at the sub-pixel level — the **browser result is the source of truth** for the live app; the golden test pins the pure-core path independently.
+- **Golden test:** `web/test/analysis.golden.test.ts` decodes the 002 fixture with **sharp** (a devDependency, Node-only) to pin the decoder-robust science. It reads its **own tracked copy** at `web/test/fixtures/spectro-002` (mirrored from `materials/002`), so it passes on a fresh clone even though `materials/` is gitignored. Pinned values: lamp slope≈0.582 nm/px, intercept≈397.9, **R²≈0.9998**, peaks≈[63,151,254,325,366]; blue-dye λmax≈627 nm; Beer-Lambert R²>0.99. The browser decode differs from sharp at the sub-pixel level — the **browser result is the source of truth** for the live app; the golden test pins the pure-core path independently.
 
 ### Data model (`web/src/lib/domain-types.ts` + the IndexedDB record)
 String-literal unions (`ExperimentMode`, `ReferenceLight`, `SpectrumOrientation`, `WorkflowStep`, `SpectralImageRole`) replace the old Prisma enums. One **denormalised** `Experiment` record per IndexedDB row:
@@ -68,11 +90,13 @@ A static export can't pre-render per-id dynamic routes (ids are created at runti
 - `/experiments/new` — setup form (client `NewExperimentForm` → `createExperiment` → `router.push("/experiment?id=…")`).
 - `/experiment?id=…` — the wizard shell (`web/src/app/experiment/page.tsx`).
 - `/report?id=…` — the full report (`web/src/app/report/page.tsx`).
-- `/showcase` — the design-system page.
+- `/showcase` — the design-system page (internal, not in the student flow; it is the only remaining consumer of the `ConnBadge` primitive, a leftover from the two-device era).
 Pages that read `useSearchParams` are wrapped in `<Suspense>` (an export requirement).
 
+A **`VersionBadge`** (`web/src/components/ui/version-badge.tsx`) is rendered once in the root layout, so a small build-version stamp sits bottom-right on every page (`no-print`). `APP_VERSION` = `NEXT_PUBLIC_APP_VERSION`, baked in at build time from the root `Dockerfile`'s `APP_VERSION` build arg (CI passes the git tag); local builds show `dev`. A deployed page reading `dev` means the build arg was lost.
+
 ### Guided wizard (`/experiment?id=…`)
-A client page (`useExperiment`) that renders the persistent frame (`StepRail` + `GuidancePanel` + per-step canvas + `WizardNav`) for the experiment's `currentStep`. Mutating children call the store and then `reload()`, provided via **`WizardReloadProvider`/`useWizardReload`** (`web/src/components/wizard/wizard-context.tsx`) — the static-app replacement for `router.refresh()`/`revalidatePath`. The 6 step canvases:
+A client page (`useExperiment`) that renders the persistent frame (`StepRail` + `GuidancePanel` + per-step canvas + `WizardNav`) for the experiment's `currentStep`. Mutating children call the store and then `reload()`, provided via **`WizardReloadProvider`/`useWizardReload`** (`web/src/components/wizard/wizard-context.tsx`) — the static-app replacement for `router.refresh()`/`revalidatePath`. `StepRail` renders `WIZARD_STEPS` = the **6** steps below (`WORKFLOW_STEPS` minus the pre-wizard `experimentSetup`); per-step teaching copy is `STEP_GUIDANCE` in `experiment-meta.ts`, sourced from `docs/web-ux-brief.md` §5. Any step without its own canvas falls through to `ComingSoonStep` — currently unreachable for real rows, since all 6 are built. The 6 step canvases:
 - **L3.1 Camera & ROI** (`RoiStep` → `RoiBoxEditor`): capture the **lamp first** (you can't mark a region without seeing the strip), then pick **orientation** + **drag a box** (mouse + touch, stored in image px) or "Use full strip", with a `<canvas>` "Region used for analysis" preview. **Orientation auto-detects from the ROI colour gradient** live (`scoreOrientation`, a one-way ANOVA: η² per axis; the larger is the suggested axis and doubles as a "Region clarity" %; confident gate goodness ≥ 0.35, margin ≥ 0.05; manual pick sticks, "↺ Auto-detect" re-enables). Changing ROI/orientation re-extracts **every image in the browser** (`analysis-client.reextractAll`: decode, re-extract profile + crop, recompute calibration) then `store.persistReextract` — instant, no network. **Dark-margin gate:** the box must keep dark background on each end of the spectrum along the dispersion axis — ≥10% of the box length per end for the lamp, ≥20% for laser lines (narrow lines need more dark context). Assessed live (`analysis-client.assessRoiMargins` → pure `analysis/roi-margins.ts` `checkRoiMargins`, band = smoothed profile above the same 22% bright floor as `candidatePeaks`); failing turns the box + handles orange (`--warn`), shows a fix-it message with the measured per-end percentages, and disables **Save region** — "Use full strip" stays enabled (the escape hatch for pre-cropped strips). Thresholds in `SpectralConstants.roiDarkMarginLamp/Laser`; pinned by `web/test/roi-margins.test.ts`. For the **laser** light, `LaserCaptureStep` (3 laser slots → "Combine the three captures") replaces the lamp.
 - **L3.2 Calibration** (`CalibrationStep`): lamp → peaks/slope/intercept/R² + `SpectrumWithStrip` (profile chart with colour-coded peak markers + the cropped strip drawn under the pixel axis, blue→red, with `reverseX` flip on negative slope) + `DetectedPeaksTable` + `CalibrationFitChart` (pixel→λ fit) + fit verdict.
 - **L3.3 Blank** (`BlankStep`): the I₀/background profile via `SpectrumWithStrip` (falls back to a plain chart if no calibration yet).
@@ -82,6 +106,8 @@ A client page (`useExperiment`) that renders the persistent frame (`StepRail` + 
 
 The retired `absorbanceReview` step (merged into `standards`) and the pre-wizard `experimentSetup` step are mapped to `standards`/`cameraRoiSetup` by the wizard page; both remain in the `WorkflowStep` union for the labels.
 
+**`AlignedLampStrip`** (`web/src/components/wizard/aligned-lamp-strip.tsx`) is the shared primitive under both `SpectrumWithStrip` (calibration + blank) and `SignalSpectraCard` (standards + the report). It draws the cropped strip as a **canonical horizontal band, blue (short λ) on the LEFT, red on the RIGHT, whatever the capture looked like**: a vertical capture is rotated 90° to lie flat, and a red→violet capture (negative calibration slope) is flipped. Peaks/markers are positioned by **wavelength, not raw pixel**, so they line up with the chart above — which the calibration step reverses (`reverseX`) in the flipped case to match. Its `PAD_LEFT`/`PAD_RIGHT` constants are tuned to the Recharts plot area (YAxis width + margins) so the band registers under the axis; changing chart margins means changing these.
+
 ### Full report (`/report?id=…`)
 A standalone, print-friendly client page built on the **same components as the wizard** so it stays consistent: calibration & blank via `SpectrumWithStrip`; calibration adds `DetectedPeaksTable`; the lamp shows the ROI box via `RoiPreview`; the standards section is the wizard's `SignalSpectraCard` rendered **`readOnly`** (non-draggable λmax). A top **"Method"** section walks the whole pixel→concentration pipeline, and every section opens with a mode-aware `Explainer`. `PrintButton` → `window.print()`; `@media print` prints on white and forces colour. The report's own light/dark toggle (`ReportThemeShell`/`ReportThemeToggle`) scopes a light OKLCH palette to the report subtree via `data-theme`, persisted in `localStorage`; printing is always forced to light.
 
@@ -90,6 +116,8 @@ A standalone, print-friendly client page built on the **same components as the w
 
 ### Capture flow (entirely client-side)
 `CaptureControls` (client) runs `analysis-client.analyzeCaptureBlob` (browser decode + ROI extract + saturation +, for the lamp, calibration + ROI crop) then writes straight to the store via `store.persistCapture` — no upload, no HTTP. `RoiBoxEditor` re-extract → `store.persistReextract`; `LaserCaptureStep` combine → `analysis-client.buildLaserCalibration` → `store.persistCapture` (role `calibration`). `web/src/lib/capture-log.ts` provides browser console timers for perf debugging.
+
+**There is no camera in the app** — photos arrive from the OS file picker (`<input type="file">`), taken with whatever camera app the student has. This is a **known, accepted limitation**: absorbance compares intensity *across* photos, so shots taken under different auto-exposure baselines are scientifically invalid, and the app cannot enforce a focus/exposure lock over files it did not capture. The mitigations are guidance plus the **saturation % reported after every capture**; a blank exposed differently from the standards shows up as a visibly bad calibration curve. The retired phone client existed precisely to hold that lock. If in-app capture is ever revisited, the full behavioural contract — including a **`getUserMedia` path that needs no second device and no server** (hold one `MediaStream` for the whole run, `applyConstraints` manual exposure/focus/white-balance) — is specified in `docs/design_handoff_continuous_camera/`.
 
 ---
 
@@ -114,7 +142,7 @@ On by default. It is now a **persisted, experiment-global setting** (`Experiment
 
 **Why two methods:** Luminance weights blue at only 0.114, suppressing a lamp's violet/blue lines (434.5, 486 nm) so the peak detector misses them — all 5 "peaks" cluster in the green, a catastrophically wrong calibration. `useMaxChannel: true` gives equal sensitivity across wavelengths. For absorbance spectra, luminance is preferred (max-channel amplifies dark-end blue/UV noise into a spurious low-concentration peak near px 0).
 
-**Calibration peak detection** uses `SpectralConstants.calibrationSmoothingWindow = 15` (vs `defaultSmoothingWindow = 5`) plus a minimum peak separation `minSep` sized to the spectral **band** (not the raw profile length).
+**Calibration peak detection** uses `SpectralConstants.calibrationSmoothingWindow = 15` plus a minimum peak separation `minSep` sized to the spectral **band** (not the raw profile length). *(`SpectralConstants.defaultSmoothingWindow = 5` is defined but **never referenced anywhere** — dead code. Non-calibration spectra are analysed unsmoothed. Don't cite it as the default in effect.)*
 
 **Spectral-band restriction (dark-margin robustness):** Before peak selection, `candidatePeaks` restricts to the **spectral band** = the span of *bright* maxima (smoothed ≥ 22% of the value range; the dimmest real 002 line, 587 nm, sits at ~33%). This fixes a real failure: a big dark margin used to (a) inflate `profile.length` so the old `minSep = length/15` merged the 587/611.5 nm pair, and (b) inject a faint impostor that could win a near-tied collinear fit in the wrong direction, flipping calibration blue↔red. Now `minSep = round(bandWidth/15)` and margin impostors fall outside the band. Pinned by `web/test/calibration-peaks.test.ts` against `fixtures/lamp-dark-red-margin.json`.
 
@@ -146,11 +174,14 @@ A pixel is **saturated** when any R,G,B channel ≥ 250/255. Saturated pixels cl
 - **λmax**: wavelength of max signal, auto from the highest-concentration standard, user-adjustable by dragging the line on the spectra chart.
 - **Beer-Lambert curve**: linear regression of signal@λmax vs known concentration → `A = ε·l·c`; back-calculate the unknown via `c = (A − intercept) / slope`.
 
-## Reference Materials (`materials/`)
-- `a-3d-printable-modular-absorption-spectrophotometer...pdf` — primary paper (J. Chem. Ed. 2024)
-- `ed3c01021_si_001.pdf` — supporting info: parts list, lab procedure, assembly guide
-- `ed3c01021_si_004.xlsx` / `_005.xlsx` — absorbance data templates
-- `ed3c01021_si_006.xlsx` / `_007.xlsx` — fluorescence data templates
+## Reference Materials (`materials/` — gitignored, local-only)
+Not in the repo: `materials/` was scrubbed from git history and is `.gitignore`d, so it exists
+only on machines that have a local copy. Nothing in the build or test suite depends on it.
+- `materials/001/a-3d-printable-modular-absorption-spectrophotometer...pdf` — primary paper (J. Chem. Ed. 2024)
+- `materials/001/ed3c01021_si_001.pdf` — supporting info: parts list, lab procedure, assembly guide
+- `materials/001/ed3c01021_si_004.xlsx` / `_005.xlsx` — absorbance data templates
+- `materials/001/ed3c01021_si_006.xlsx` / `_007.xlsx` — fluorescence data templates
+- `materials/002/` — the sample strip dataset; its tracked mirror is `web/test/fixtures/spectro-002`
 
 ## Build & Run (from `web/`)
 ```bash
@@ -185,7 +216,9 @@ All commits follow [Conventional Commits](https://www.conventionalcommits.org/):
 - Subject ≤ 72 chars, lowercase after the colon, no trailing period.
 - Body bullets when a commit touches more than one concern.
 - `npm run typecheck` + `npm test` (+ `npm run build` for build-affecting changes) must pass before committing.
+- Run a **CVE/SAST scan before committing** — `trivy fs --scanners vuln --severity HIGH,CRITICAL web` (and optionally `semgrep scan --config auto web/src`). Two findings are known and **accepted** — `postcss@8.4.31` and a nested optional `sharp`, both exact `next`-internal pins that never execute in a static export. Do not "fix" them with npm `overrides`.
 - Update `CLAUDE.md` in the same commit when domain knowledge, the data model, workflow steps, or architecture changes.
+- Releases: bump `web/package.json`, commit as `chore(release): vX.Y.Z`, then push the tag — `docs/deploy-checklist.html` is the interactive step-by-step.
 
 ## Development Notes
 - The app is **client-only**: anything touching IndexedDB / `window` / canvas must run in a client component (or be guarded). Server components may only do static rendering.

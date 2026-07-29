@@ -1,5 +1,33 @@
 # Handoff: Continuous Camera Capture Session (Photo Spectrometer)
 
+> ## ⚠ Status: NOT IMPLEMENTED — design retained deliberately
+>
+> **This was never built.** It specifies a two-device app (laptop + paired phone camera) that
+> was subsequently **removed** in favour of a single, fully static in-browser app: photos now
+> come from the **file picker**, there is no phone client, no pairing, no server, and no live
+> camera stream anywhere in the codebase. For the app as it exists, read
+> [`../../CLAUDE.md`](../../CLAUDE.md).
+>
+> **Two reasons this bundle is kept rather than deleted:**
+>
+> 1. **It is the origin of the app's visual system.** The OKLCH palette, type choices, radii,
+>    and the 400→700 nm spectrum gradient in [Design Tokens](#design-tokens-exact-from-stylescss)
+>    were carried into the shipped app as HeroUI semantic-token overrides in
+>    `web/src/app/globals.css`, plus the ported primitives in
+>    `web/src/components/ui/primitives.tsx`. **The token values below are still the live
+>    palette** — treat this as the reference when adding UI.
+> 2. **It is the only complete spec of the exposure-lock problem, which is still unsolved.**
+>    Absorbance compares light intensity *between* photos, so photos taken under different
+>    auto-exposure baselines are scientifically invalid. The current app cannot enforce
+>    anything here — it accepts whatever files the student uploads, and mitigates only via the
+>    post-capture saturation warning. **§2's `getUserMedia` path is the route by which this
+>    could be fixed inside the current architecture** — one browser, one device, no server:
+>    hold a single `MediaStream` for the whole run and apply manual exposure/focus/white-balance
+>    constraints. If in-app capture is ever revisited, start from the Core Behavioral Contract
+>    below and ignore everything about pairing.
+>
+> Everything below is the original handoff text, unedited. Read "laptop"/"phone" as historical.
+
 ## Overview
 The Photo Spectrometer is a two-device classroom experiment: a **laptop web app** (the "Spectro Web" wizard) drives the experiment and does the analysis, and a **paired phone** acts as the camera. The student walks through a calibration + measurement flow (frame → lamp → blank → standards → unknown), photographing a spectrum strip at each step. The laptop computes a Beer–Lambert calibration and reports the unknown's concentration.
 
