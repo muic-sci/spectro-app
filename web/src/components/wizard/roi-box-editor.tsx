@@ -19,7 +19,7 @@ import { Icon } from "@/components/ui/primitives";
 import { assessRoiMargins, reextractAll, suggestOrientation } from "@/lib/analysis-client";
 import { persistReextract } from "@/lib/store/experiments";
 import { useWizardReload } from "@/components/wizard/wizard-context";
-import type { OrientationScore, RoiMarginCheck } from "@/lib/analysis";
+import type { OrientationScore, RoiMarginsAssessment } from "@/lib/analysis";
 
 interface Rect {
   left: number;
@@ -64,8 +64,9 @@ export function RoiBoxEditor({
   const [saving, setSaving] = useState(false);
   // Live colour-gradient analysis of the current box → auto orientation + goodness.
   const [score, setScore] = useState<OrientationScore | null>(null);
-  // Live dark-margin check of the current box along the dispersion axis.
-  const [margins, setMargins] = useState<RoiMarginCheck | null>(null);
+  // Live dark-margin check of the current box: along the dispersion axis, plus
+  // across the strip in fluorescence (laser) mode.
+  const [margins, setMargins] = useState<RoiMarginsAssessment | null>(null);
   // While true, the orientation chip follows the detected axis as the box changes.
   const [auto, setAuto] = useState(true);
   const autoRef = useRef(true); // mirror of `auto` for the async scoring callback
@@ -353,11 +354,14 @@ export function RoiBoxEditor({
   const handle = "absolute h-3 w-3 -m-1.5 rounded-full border border-bg touch-none";
 
   // Dark-margin gate: enough dark background on each end of the spectrum
-  // (10% of the box length for the lamp, 20% for laser lines) or Save is
-  // disabled and the box turns orange. Null = not assessed yet (don't block).
+  // (10% of the box length for the lamp, 20% for laser lines) — and, in
+  // fluorescence (laser) mode, on each side ACROSS the strip (15%) — or Save
+  // is disabled and the box turns orange. Null = not assessed yet (don't block).
   const marginsOk = margins == null || margins.ok;
   const boxTone = marginsOk ? "var(--accent-color)" : "var(--warn)";
   const [endA, endB] = orientation === "vertical" ? ["top", "bottom"] : ["left", "right"];
+  // Cross-axis sides (perpendicular to the dispersion axis).
+  const [sideA, sideB] = orientation === "vertical" ? ["left", "right"] : ["top", "bottom"];
   const orientations: { value: Orientation; label: string }[] = [
     { value: "horizontal", label: "↔ Horizontal" },
     { value: "vertical", label: "↕ Vertical" },
@@ -519,17 +523,33 @@ export function RoiBoxEditor({
         )}
       </div>
 
-      {margins && !margins.ok && (
+      {margins && !margins.along.ok && (
         <p className="text-xs" style={{ color: "var(--warn)" }}>
-          {margins.bandFound ? (
+          {margins.along.bandFound ? (
             <>
-              Leave at least {Math.round(margins.required * 100)}% dark background on each end of
-              the spectrum — right now the box has {endA} {Math.round(margins.lead * 100)}% and{" "}
-              {endB} {Math.round(margins.tail * 100)}%. Drag the {endA}/{endB} edges outward so
+              Leave at least {Math.round(margins.along.required * 100)}% dark background on each
+              end of the spectrum — right now the box has {endA}{" "}
+              {Math.round(margins.along.lead * 100)}% and {endB}{" "}
+              {Math.round(margins.along.tail * 100)}%. Drag the {endA}/{endB} edges outward so
               some dark strip shows past both ends, then save.
             </>
           ) : (
             <>No bright spectrum found inside the box — move it over the strip first.</>
+          )}
+        </p>
+      )}
+      {margins?.cross && !margins.cross.ok && (margins.along.ok || margins.cross.bandFound) && (
+        <p className="text-xs" style={{ color: "var(--warn)" }}>
+          {margins.cross.bandFound ? (
+            <>
+              Fluorescence also needs dark background on each side of the strip — at least{" "}
+              {Math.round(margins.cross.required * 100)}% {sideA} and {sideB}. Right now the box
+              has {sideA} {Math.round(margins.cross.lead * 100)}% and {sideB}{" "}
+              {Math.round(margins.cross.tail * 100)}%. Drag the {sideA}/{sideB} edges outward so
+              dark background shows on both sides of the strip, then save.
+            </>
+          ) : (
+            <>No bright strip found across the box — move it over the strip first.</>
           )}
         </p>
       )}

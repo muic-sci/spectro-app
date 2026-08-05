@@ -23,11 +23,13 @@ import {
   checkSaturation,
   checkRoiMargins,
   requiredDarkMargin,
+  requiredCrossDarkMargin,
   scoreOrientation,
   calibrateFromLampProfile,
   calibrateFromLaserProfiles,
   roiPixelBounds,
   DEFAULT_ROI,
+  SpectralConstants,
 } from "@/lib/analysis";
 import type {
   Calibration,
@@ -35,7 +37,7 @@ import type {
   OrientationScore,
   RasterImage,
   Rect,
-  RoiMarginCheck,
+  RoiMarginsAssessment,
   SaturationResult,
 } from "@/lib/analysis";
 
@@ -174,25 +176,33 @@ export async function suggestOrientation(
 }
 
 /**
- * Check the ROI's dark margins along the dispersion axis — the drawn box must
- * keep dark background on BOTH ends of the spectrum (10% of its length for the
- * lamp, 20% for laser lines) or the band restriction loses its dark context
- * and a slightly-shifted capture can clip. Decode is cached, so this is cheap
- * to run live while the student drags the box.
+ * Check the ROI's dark margins — the drawn box must keep dark background on
+ * BOTH ends of the spectrum along the dispersion axis (10% of its length for
+ * the lamp, 20% for laser lines) or the band restriction loses its dark
+ * context and a slightly-shifted capture can clip. In fluorescence (laser)
+ * mode the box must ALSO keep dark background across the strip — 15% on each
+ * side along the cross axis — assessed with the same band check on the
+ * cross-axis profile. Decode is cached, so this is cheap to run live while
+ * the student drags the box.
  */
 export async function assessRoiMargins(
   url: string,
   roi: Rect | null,
   opts: { vertical: boolean; lightType?: string; lineariseGamma?: boolean },
-): Promise<RoiMarginCheck> {
+): Promise<RoiMarginsAssessment> {
   const raster = await decodeFromUrl(url);
   // The editor's image is the lamp / laser composite → max-channel, like calibration.
-  const profile = extractIntensityProfile(raster, roi ?? DEFAULT_ROI, {
-    useMaxChannel: true,
-    vertical: opts.vertical,
-    lineariseGamma: opts.lineariseGamma ?? true,
-  });
-  return checkRoiMargins(profile, requiredDarkMargin(opts.lightType));
+  const extract = (vertical: boolean) =>
+    extractIntensityProfile(raster, roi ?? DEFAULT_ROI, {
+      useMaxChannel: true,
+      vertical,
+      lineariseGamma: opts.lineariseGamma ?? true,
+    });
+  const along = checkRoiMargins(extract(opts.vertical), requiredDarkMargin(opts.lightType));
+  const crossRequired = requiredCrossDarkMargin(opts.lightType);
+  const cross =
+    crossRequired == null ? null : checkRoiMargins(extract(!opts.vertical), crossRequired);
+  return { along, cross, ok: along.ok && (cross?.ok ?? true) };
 }
 
 export interface ClientCapture {
@@ -221,7 +231,13 @@ export async function analyzeCaptureBlob(
     lineariseGamma: opts.lineariseGamma ?? true,
   });
   timer.mark("extracted", { points: profile.length });
-  const saturation = checkSaturation(raster, roi);
+  // The blank is I₀ — clipping there corrupts every absorbance, and phone tone
+  // mapping can clip below 255, so it gets the stricter near-saturation threshold.
+  const saturation = checkSaturation(
+    raster,
+    roi,
+    opts.role === "blank" ? SpectralConstants.saturationThresholdBlank : undefined,
+  );
   timer.mark("saturation", { fraction: +saturation.fraction.toFixed(3) });
   const calibration =
     opts.role === "calibration" ? calibrateFromLampProfile(profile) : undefined;

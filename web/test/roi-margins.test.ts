@@ -1,11 +1,17 @@
 /**
  * ROI dark-margin gate: the drawn box must keep dark background on each end of
  * the spectrum along the dispersion axis — 10% of the box length for the lamp,
- * 20% for laser lines (narrow lines need more dark context). Pins
- * checkRoiMargins' band detection and requiredDarkMargin's thresholds.
+ * 20% for laser lines (narrow lines need more dark context) — and, in
+ * fluorescence (laser) mode, on each side ACROSS the strip (15%, cross axis).
+ * Pins checkRoiMargins' band detection and both required-margin thresholds.
  */
 import { describe, expect, it } from "vitest";
-import { checkRoiMargins, requiredDarkMargin, type DataPoint } from "../src/lib/analysis";
+import {
+  checkRoiMargins,
+  requiredDarkMargin,
+  requiredCrossDarkMargin,
+  type DataPoint,
+} from "../src/lib/analysis";
 
 /** A dark baseline with one bright plateau from `from` to `to` (inclusive). */
 function plateau(length: number, from: number, to: number, amp = 200, base = 2): DataPoint[] {
@@ -17,6 +23,14 @@ describe("requiredDarkMargin", () => {
     expect(requiredDarkMargin("fluorescent")).toBeCloseTo(0.1);
     expect(requiredDarkMargin(undefined)).toBeCloseTo(0.1);
     expect(requiredDarkMargin("laser")).toBeCloseTo(0.2);
+  });
+});
+
+describe("requiredCrossDarkMargin", () => {
+  it("is 15% per side for the laser (fluorescence) light and absent otherwise", () => {
+    expect(requiredCrossDarkMargin("laser")).toBeCloseTo(0.15);
+    expect(requiredCrossDarkMargin("fluorescent")).toBeNull();
+    expect(requiredCrossDarkMargin(undefined)).toBeNull();
   });
 });
 
@@ -42,6 +56,16 @@ describe("checkRoiMargins", () => {
     const p = plateau(200, 30, 169);
     expect(checkRoiMargins(p, requiredDarkMargin("fluorescent")).ok).toBe(true);
     expect(checkRoiMargins(p, requiredDarkMargin("laser")).ok).toBe(false);
+  });
+
+  it("gates the cross axis at 15% per side in fluorescence mode", () => {
+    // The cross-axis profile is the strip seen side-on: dark rows, the bright
+    // body, dark rows. 25% dark per side passes; a box hugging one side fails.
+    const req = requiredCrossDarkMargin("laser")!;
+    expect(checkRoiMargins(plateau(100, 25, 74), req).ok).toBe(true);
+    const hugging = checkRoiMargins(plateau(100, 5, 79), req);
+    expect(hugging.ok).toBe(false);
+    expect(hugging.lead).toBeLessThan(req);
   });
 
   it("reports no band for flat or empty profiles", () => {

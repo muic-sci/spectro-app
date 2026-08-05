@@ -37,6 +37,31 @@ export function requiredDarkMargin(lightType?: string): number {
 }
 
 /**
+ * Required dark margin per SIDE of the strip along the cross axis
+ * (perpendicular to dispersion), or null when no cross gate applies.
+ * Fluorescence mode (laser light — the pairing is 1:1) measures a faint
+ * emission band, so the box must also keep dark background above/below the
+ * strip; the bright lamp of Beer-Lambert mode needs no cross gate.
+ */
+export function requiredCrossDarkMargin(lightType?: string): number | null {
+  return lightType === "laser" ? SpectralConstants.roiDarkMarginCross : null;
+}
+
+/**
+ * Combined ROI margin assessment: `along` the dispersion axis (both spectrum
+ * ends — every light), and `cross` the strip (both sides — fluorescence/laser
+ * only, null otherwise). The cross check runs `checkRoiMargins` on the
+ * cross-axis profile (extracted with `vertical` flipped), so "band" there means
+ * the strip's bright body seen side-on.
+ */
+export interface RoiMarginsAssessment {
+  along: RoiMarginCheck;
+  cross: RoiMarginCheck | null;
+  /** True when every applicable check passes. */
+  ok: boolean;
+}
+
+/**
  * Measure the dark margins of a (max-channel) profile extracted from the ROI
  * along the dispersion axis. The bright band is everything above the same 22%
  * bright floor the calibration band restriction uses (see `candidatePeaks`);

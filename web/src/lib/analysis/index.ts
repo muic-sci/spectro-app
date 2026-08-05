@@ -25,8 +25,8 @@ export {
   dominantPeak,
   pixelToWavelength,
 } from "./calibration";
-export { checkRoiMargins, requiredDarkMargin } from "./roi-margins";
-export type { RoiMarginCheck } from "./roi-margins";
+export { checkRoiMargins, requiredDarkMargin, requiredCrossDarkMargin } from "./roi-margins";
+export type { RoiMarginCheck, RoiMarginsAssessment } from "./roi-margins";
 export {
   computeAbsorbance,
   computeFluorescence,

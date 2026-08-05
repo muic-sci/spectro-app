@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  checkSaturation,
   computeAbsorbance,
   computeFluorescence,
   computeSignal,
@@ -12,6 +13,9 @@ import {
   findLocalMaxima,
   determineConcentration,
   pixelToWavelength,
+  DEFAULT_ROI,
+  SpectralConstants,
+  type RasterImage,
 } from "../src/lib/analysis";
 
 describe("absorbance A = -log10(I/I0)", () => {
@@ -69,6 +73,35 @@ describe("fluorescence F = I − I₀ (background-subtracted)", () => {
     );
     // Defaults to absorbance.
     expect(computeSignal(sample, blank)[0].y).toBeCloseTo(1, 10);
+  });
+});
+
+describe("saturation check", () => {
+  /** A 4×2 raster with every channel at `v`. */
+  const flat = (v: number): RasterImage => ({
+    width: 4,
+    height: 2,
+    data: new Uint8ClampedArray(4 * 2 * 3).fill(v),
+  });
+
+  it("default threshold flags only pixels at/above 250", () => {
+    expect(checkSaturation(flat(249), DEFAULT_ROI).isSaturated).toBe(false);
+    const sat = checkSaturation(flat(250), DEFAULT_ROI);
+    expect(sat.isSaturated).toBe(true);
+    expect(sat.fraction).toBe(1);
+  });
+
+  it("blank threshold (230) catches tone-mapped near-clipping the default misses", () => {
+    // Phone tone mapping rolls highlights off below 255 — a blank (I₀) can be
+    // effectively clipped at ~240 without a single pixel reaching 250.
+    expect(SpectralConstants.saturationThresholdBlank).toBe(230);
+    const img = flat(240);
+    expect(checkSaturation(img, DEFAULT_ROI).isSaturated).toBe(false);
+    const strict = checkSaturation(img, DEFAULT_ROI, SpectralConstants.saturationThresholdBlank);
+    expect(strict.isSaturated).toBe(true);
+    expect(strict.fraction).toBe(1);
+    expect(strict.threshold).toBe(230);
+    expect(checkSaturation(flat(229), DEFAULT_ROI, 230).isSaturated).toBe(false);
   });
 });
 
