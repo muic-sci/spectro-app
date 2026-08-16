@@ -13,23 +13,27 @@
 import { STORE_EXPERIMENTS, idbPut } from "./db";
 import { getExperiment, readExperiment, listExperiments } from "./experiments";
 import { getBlob, saveBlob, croppedKey } from "./blobs";
-import { zipSync, unzipSync, isZip, type ZipEntry } from "./zip";
+import { zipSync, type ZipEntry } from "./zip";
 import { buildResultsCsv } from "./export-csv";
+import {
+  BUNDLE_VERSION,
+  base64ToBytes,
+  extForType,
+  imageBlobBaseNames,
+  readBundles,
+  slug,
+  splitBlobKey,
+  type Bundle,
+  type BundleBlob,
+} from "./bundle";
 import { deriveAnalysis } from "@/lib/experiment-analysis";
 import type { Experiment } from "@/lib/domain-types";
 
-const BUNDLE_VERSION = 1;
-
-interface BundleBlob {
-  key: string;
-  type: string;
-  data: string; // base64
-}
-interface Bundle {
-  spectroBundle: number;
-  experiment: Experiment;
-  blobs: BundleBlob[];
-}
+// The bundle *format* (types, base64, file naming, zip → JSON) lives in
+// ./bundle so a headless Node process can read the same archives; this module
+// is the browser half — IndexedDB, Blobs and downloads.
+export { imageBlobBaseNames } from "./bundle";
+export type { Bundle } from "./bundle";
 
 async function blobToBase64(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -41,108 +45,8 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return btoa(binary);
 }
 
-function base64ToBytes(data: string): Uint8Array<ArrayBuffer> {
-  const binary = atob(data);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
 function base64ToBlob(data: string, type: string): Blob {
   return new Blob([base64ToBytes(data)], { type: type || "application/octet-stream" });
-}
-
-/** File extension for an image blob, by MIME type (`images/<name>.<ext>`). */
-function extForType(type: string): string {
-  switch (type) {
-    case "image/png":
-      return "png";
-    case "image/jpeg":
-      return "jpg";
-    case "image/webp":
-      return "webp";
-    default:
-      return "bin";
-  }
-}
-
-function slug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "experiment";
-}
-
-/** Trim a number to a clean, filename-friendly string (no float noise). */
-function numToken(n: number): string {
-  return String(Number(n.toFixed(6)));
-}
-
-/** Filename-safe form of a concentration unit: "mg/L" → "mgL", "µM" → "uM", "%" → "pct". */
-function unitToken(unit: string): string {
-  return unit.replace(/µ/g, "u").replace(/%/g, "pct").replace(/[^a-zA-Z0-9]+/g, "");
-}
-
-/** Append a `-2`, `-3`, … suffix until the name is unused (keeps zip entries unique). */
-function unique(name: string, used: Set<string>): string {
-  if (!used.has(name)) {
-    used.add(name);
-    return name;
-  }
-  let n = 2;
-  while (used.has(`${name}-${n}`)) n++;
-  const out = `${name}-${n}`;
-  used.add(out);
-  return out;
-}
-
-/**
- * Human, step-reflecting base name (no extension) for each image's blob files,
- * keyed by image id. Drives the export zip layout so the photos are
- * self-describing rather than opaque ids:
- *   - calibration / blank → `calibration`, `blank`
- *   - laser line          → `laser-650nm`
- *   - standard            → `standard-0.1mgL` (concentration + experiment unit)
- *   - unknown             → `unknown-1` (1-based, in capture order)
- * Names are de-duplicated (e.g. two standards at the same concentration) so the
- * zip never has colliding entries.
- */
-export function imageBlobBaseNames(exp: Experiment): Map<string, string> {
-  const unit = unitToken(exp.unit);
-  const stdByImage = new Map<string, number>();
-  for (const s of exp.standards) if (s.imageId) stdByImage.set(s.imageId, s.concentration);
-  const unknownNo = new Map<string, number>();
-  exp.unknowns.forEach((u, i) => {
-    if (u.imageId) unknownNo.set(u.imageId, i + 1);
-  });
-
-  const used = new Set<string>();
-  const names = new Map<string, string>();
-  for (const im of exp.images) {
-    let base: string;
-    switch (im.role) {
-      case "calibration":
-        base = "calibration";
-        break;
-      case "blank":
-        base = "blank";
-        break;
-      case "laser":
-        base = im.laserWavelength != null ? `laser-${numToken(im.laserWavelength)}nm` : "laser";
-        break;
-      case "standard": {
-        const c = stdByImage.get(im.id);
-        base = c != null ? `standard-${numToken(c)}${unit}` : "standard";
-        break;
-      }
-      case "unknown": {
-        const n = unknownNo.get(im.id);
-        base = n != null ? `unknown-${n}` : "unknown";
-        break;
-      }
-      default:
-        base = im.role;
-    }
-    names.set(im.id, unique(base, used));
-  }
-  return names;
 }
 
 /**
@@ -225,8 +129,7 @@ export async function downloadExperiment(id: string): Promise<void> {
   }
 
   for (const b of bundle.blobs) {
-    const isCrop = b.key.endsWith("crop");
-    const imageId = isCrop ? b.key.slice(0, -"crop".length) : b.key;
+    const { imageId, isCrop } = splitBlobKey(b.key);
     const base = baseNames.get(imageId) ?? imageId;
     const ext = extForType(b.type);
     entries.push({
@@ -249,13 +152,6 @@ export async function downloadAll(): Promise<void> {
   triggerDownload(new Blob([json], { type: "application/json" }), "spectro-experiments.spectro.json");
 }
 
-/** Pull the bundle JSON text out of a `.spectro.zip` archive. */
-function readBundleJson(bytes: Uint8Array): string {
-  const entry = unzipSync(bytes).find((e) => e.name.endsWith(".json"));
-  if (!entry) throw new Error("Archive has no bundle JSON.");
-  return new TextDecoder().decode(entry.data);
-}
-
 /**
  * Import a bundle file (single experiment or an "experiments" array), from a
  * `.spectro.zip` archive or a legacy plain `.spectro.json`. Each imported
@@ -263,14 +159,10 @@ function readBundleJson(bytes: Uint8Array): string {
  * importing never overwrites an existing one. Returns the new experiment ids.
  */
 export async function importBundle(file: File): Promise<string[]> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const text = isZip(bytes) ? readBundleJson(bytes) : new TextDecoder().decode(bytes);
-  const parsed = JSON.parse(text) as Bundle | { experiments: Bundle[] };
-  const bundles: Bundle[] = "experiments" in parsed ? parsed.experiments : [parsed];
+  const bundles = readBundles(new Uint8Array(await file.arrayBuffer()));
   const taken = new Set((await listExperiments()).map((s) => s.name));
   const ids: string[] = [];
   for (const bundle of bundles) {
-    if (!bundle?.experiment) continue;
     ids.push(await importOne(bundle, uniqueName(bundle.experiment.name, taken)));
   }
   return ids;
@@ -283,13 +175,12 @@ async function importOne(bundle: Bundle, name: string): Promise<string> {
   const imageIdMap = new Map<string, string>();
   for (const im of exp.images) imageIdMap.set(im.id, newId());
 
+  // `readBundles` has already defaulted a missing `lineariseGamma` to true
+  // (legacy bundles predate the toggle), so the record is import-ready.
   const remapped: Experiment = {
     ...exp,
     id: expId,
     name,
-    // Bundles exported before the gamma toggle have no field; the old code always
-    // linearised, so default missing → true (keeps imported science identical).
-    lineariseGamma: exp.lineariseGamma ?? true,
     images: exp.images.map((im) => ({ ...im, id: imageIdMap.get(im.id)!, url: "" })),
     standards: exp.standards.map((s) => ({
       ...s,
@@ -305,8 +196,7 @@ async function importOne(bundle: Bundle, name: string): Promise<string> {
 
   // Write the (remapped) blobs first, then the record.
   for (const b of bundle.blobs) {
-    const isCrop = b.key.endsWith("crop");
-    const oldImageId = isCrop ? b.key.slice(0, -"crop".length) : b.key;
+    const { imageId: oldImageId, isCrop } = splitBlobKey(b.key);
     const newImageId = imageIdMap.get(oldImageId);
     if (!newImageId) continue;
     const newKey = isCrop ? croppedKey(newImageId) : newImageId;

@@ -20,16 +20,16 @@ import { getBlob } from "@/lib/store/blobs";
 import { startTimer } from "@/lib/capture-log";
 import {
   extractIntensityProfile,
-  checkSaturation,
+  extractRoleProfile,
+  checkRoleSaturation,
+  calibrationFromProfiles,
   checkRoiMargins,
   requiredDarkMargin,
   requiredCrossDarkMargin,
   scoreOrientation,
-  calibrateFromLampProfile,
   calibrateFromLaserProfiles,
   roiPixelBounds,
   DEFAULT_ROI,
-  SpectralConstants,
 } from "@/lib/analysis";
 import type {
   Calibration,
@@ -223,24 +223,16 @@ export async function analyzeCaptureBlob(
   const raster = await decodeImageBrowser(blob);
   timer.mark("decoded", { width: raster.width, height: raster.height });
   const roi = opts.roi ?? DEFAULT_ROI;
-  // Laser captures, like the lamp, want equal sensitivity across colours.
-  const useMaxChannel = opts.role === "calibration" || opts.role === "laser";
-  const profile = extractIntensityProfile(raster, roi, {
-    useMaxChannel,
-    vertical: opts.vertical,
-    lineariseGamma: opts.lineariseGamma ?? true,
-  });
+  // Per-role extraction + saturation rules live in the shared analysis pipeline
+  // (max-channel for lamp/laser; the stricter blank threshold).
+  const profile = extractRoleProfile(raster, roi, opts);
   timer.mark("extracted", { points: profile.length });
-  // The blank is I₀ — clipping there corrupts every absorbance, and phone tone
-  // mapping can clip below 255, so it gets the stricter near-saturation threshold.
-  const saturation = checkSaturation(
-    raster,
-    roi,
-    opts.role === "blank" ? SpectralConstants.saturationThresholdBlank : undefined,
-  );
+  const saturation = checkRoleSaturation(raster, roi, opts.role);
   timer.mark("saturation", { fraction: +saturation.fraction.toFixed(3) });
   const calibration =
-    opts.role === "calibration" ? calibrateFromLampProfile(profile) : undefined;
+    opts.role === "calibration"
+      ? calibrationFromProfiles([{ role: "calibration", points: profile }])
+      : undefined;
   if (calibration) timer.mark("calibrated", { rSquared: +calibration.rSquared.toFixed(4) });
   const cropBlob = await renderCropBlob(raster, opts.roi);
   timer.mark("cropped", { cropBytes: cropBlob.size });
@@ -281,19 +273,23 @@ export async function buildLaserCalibration(opts: {
   timer.mark("decoded all", { sizes: rasters.map((r) => `${r.width}x${r.height}`).join(",") });
   const channels = opts.lasers.map((l, i) => ({
     wavelength: l.wavelength,
-    profile: extractIntensityProfile(rasters[i], roi, { useMaxChannel: true, vertical: opts.vertical, lineariseGamma }),
+    profile: extractRoleProfile(rasters[i], roi, {
+      role: "laser",
+      vertical: opts.vertical,
+      lineariseGamma,
+    }),
   }));
   const calibration = calibrateFromLaserProfiles(channels);
   timer.mark("fit", { rSquared: +calibration.rSquared.toFixed(4) });
 
   const composite = compositeMaxBlend(rasters);
   timer.mark("composited");
-  const compositeProfile = extractIntensityProfile(composite, roi, {
-    useMaxChannel: true,
+  const compositeProfile = extractRoleProfile(composite, roi, {
+    role: "calibration",
     vertical: opts.vertical,
     lineariseGamma,
   });
-  const saturation = checkSaturation(composite, roi);
+  const saturation = checkRoleSaturation(composite, roi, "calibration");
   timer.mark("extracted+saturation", { points: compositeProfile.length });
   const compositeBlob = await rasterToJpegBlob(composite);
   const cropBlob = await renderCropBlob(composite, opts.roi);
@@ -328,10 +324,8 @@ export async function reextractAll(opts: {
   const results = await Promise.all(
     opts.images.map(async (img) => {
       const raster = await decodeImageId(img.id);
-      // Lamp composite + laser lines both want equal colour sensitivity.
-      const useMaxChannel = img.role === "calibration" || img.role === "laser";
-      const points = extractIntensityProfile(raster, roi, {
-        useMaxChannel,
+      const points = extractRoleProfile(raster, roi, {
+        role: img.role,
         vertical: opts.vertical,
         lineariseGamma,
       });
@@ -340,16 +334,7 @@ export async function reextractAll(opts: {
     }),
   );
 
-  let calibration: Calibration | undefined;
-  if (opts.lightType === "laser") {
-    const channels = results
-      .filter((r) => r.role === "laser" && typeof r.laserWavelength === "number" && r.points.length)
-      .map((r) => ({ wavelength: r.laserWavelength as number, profile: r.points }));
-    calibration = channels.length >= 2 ? calibrateFromLaserProfiles(channels) : undefined;
-  } else {
-    const lamp = results.find((r) => r.role === "calibration");
-    calibration = lamp && lamp.points.length ? calibrateFromLampProfile(lamp.points) : undefined;
-  }
+  const calibration = calibrationFromProfiles(results, opts.lightType);
 
   return {
     profiles: results.map((r) => ({ imageId: r.imageId, points: r.points })),

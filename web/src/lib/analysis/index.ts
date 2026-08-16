@@ -28,6 +28,14 @@ export {
 export { checkRoiMargins, requiredDarkMargin, requiredCrossDarkMargin } from "./roi-margins";
 export type { RoiMarginCheck, RoiMarginsAssessment } from "./roi-margins";
 export {
+  maxChannelForRole,
+  saturationThresholdForRole,
+  extractRoleProfile,
+  checkRoleSaturation,
+  calibrationFromProfiles,
+} from "./pipeline";
+export type { ProfiledImage, RoleExtractOptions } from "./pipeline";
+export {
   computeAbsorbance,
   computeFluorescence,
   computeSignal,
