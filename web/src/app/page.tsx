@@ -25,7 +25,7 @@ export default function Home() {
           <span className="text-accent">Entirely in your browser.</span>
         </h2>
         <p className="max-w-xl text-t2">
-          Spectro Web walks students through Beer-Lambert quantitative analysis one step at a time.
+          Spectro Web walks students through quantitative analysis using absorption and fluorescence modes, one step at a time.
           Upload your spectrum photos and every chart, calculation and export happens on your own
           machine — no account, no server, nothing uploaded.
         </p>

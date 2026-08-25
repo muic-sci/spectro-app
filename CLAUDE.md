@@ -238,7 +238,7 @@ All commits follow [Conventional Commits](https://www.conventionalcommits.org/):
 - `npm run typecheck` + `npm test` (+ `npm run build` for build-affecting changes) must pass before committing.
 - Run a **CVE/SAST scan before committing** — `trivy fs --scanners vuln --severity HIGH,CRITICAL web` (and optionally `semgrep scan --config auto web/src`). Two findings are known and **accepted** — `postcss@8.4.31` and a nested optional `sharp`, both exact `next`-internal pins that never execute in a static export. Do not "fix" them with npm `overrides`.
 - Update `CLAUDE.md` in the same commit when domain knowledge, the data model, workflow steps, or architecture changes.
-- Releases: bump `web/package.json`, commit as `chore(release): vX.Y.Z`, then push the tag — `docs/deploy-checklist.html` is the interactive step-by-step.
+- Releases: bump `web/package.json` and **amend it into the last local (unpushed) commit** rather than adding a separate `chore(release): vX.Y.Z` commit; only add a standalone release commit when everything being released is already pushed. Then push the tag — `docs/deploy-checklist.html` is the interactive step-by-step.
 
 ## Development Notes
 - The app is **client-only**: anything touching IndexedDB / `window` / canvas must run in a client component (or be guarded). Server components may only do static rendering.

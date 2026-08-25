@@ -66,14 +66,14 @@ export interface ModeMeta {
 export const EXPERIMENT_MODES: ModeMeta[] = [
   {
     value: "beerLambert",
-    label: "Beer-Lambert quantitation",
+    label: "Absorption mode",
     tagline: "Find an unknown concentration from how much light it absorbs",
     description:
       "Shine broadband light through your sample and compare how much it absorbs against known standards. Calibrated with a fluorescent lamp — its known emission lines set the wavelength scale.",
   },
   {
     value: "fluorescence",
-    label: "Fluorescence quantitation",
+    label: "Fluorescence mode",
     tagline: "Find an unknown concentration from how brightly it emits",
     description:
       "Excite your sample and compare how brightly it emits against known standards. Calibrated with red/green/blue lasers — their known wavelengths set the wavelength scale.",

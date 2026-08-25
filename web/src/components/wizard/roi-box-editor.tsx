@@ -476,7 +476,7 @@ export function RoiBoxEditor({
             Gamma correction {gamma ? "on" : "off"}
           </span>
           <span className="text-xs text-t4">
-            — linearise sRGB before averaging (recommended for Beer-Lambert). Toggling re-analyses
+            — linearise sRGB before averaging (recommended for absorption mode). Toggling re-analyses
             every capture.
           </span>
         </div>
