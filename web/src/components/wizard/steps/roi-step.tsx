@@ -14,7 +14,7 @@ import { CaptureControls } from "@/components/wizard/capture-controls";
 import { RoiBoxEditor } from "@/components/wizard/roi-box-editor";
 import { LaserCaptureStep, type LaserImage } from "@/components/wizard/steps/laser-capture-step";
 import { Icon } from "@/components/ui/primitives";
-import type { ReferenceLight } from "@/lib/domain-types";
+import type { ExperimentMode, ReferenceLight } from "@/lib/domain-types";
 
 export interface Roi {
   left: number;
@@ -33,6 +33,7 @@ export function RoiStep({
   images,
   calibrationImageUrl,
   lightType,
+  mode,
   laserChannels,
   laserImages,
 }: {
@@ -44,6 +45,8 @@ export function RoiStep({
   images: { id: string; role: string; laserWavelength?: number | null }[];
   calibrationImageUrl: string | null;
   lightType: ReferenceLight;
+  /** Experiment mode — fluorescence adds the cross-axis dark-margin gate. */
+  mode: ExperimentMode;
   /** Laser channels (label + wavelength), in order — laser mode only. */
   laserChannels: { label: string; wavelength: number }[];
   /** Laser captures stored so far — laser mode only. */
@@ -107,6 +110,7 @@ export function RoiStep({
         initialOrientation={orientation}
         initialLineariseGamma={lineariseGamma}
         lightType={lightType}
+        mode={mode}
       />
 
       <details className="rounded-lg border border-line bg-panel p-4">

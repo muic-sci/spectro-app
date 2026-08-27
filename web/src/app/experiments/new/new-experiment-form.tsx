@@ -5,13 +5,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
 import { Icon } from "@/components/ui/primitives";
+import type { ReferenceLight } from "@/lib/domain-types";
 import {
   CONCENTRATION_UNITS,
   DEFAULT_UNIT,
   EXPERIMENT_MODES,
   LASER_CHANNELS,
-  lightForMode,
+  REFERENCE_LIGHTS,
+  defaultLightForMode,
   lightMeta,
+  modeMeta,
   normalizeUnit,
   type ModeMeta,
 } from "@/lib/experiment-meta";
@@ -73,19 +76,28 @@ export function NewExperimentForm() {
   const [name, setName] = useState("");
   const [unit, setUnit] = useState<string>(DEFAULT_UNIT);
   const [mode, setMode] = useState<ModeMeta["value"]>(EXPERIMENT_MODES[0].value);
+  // The calibration light is an independent choice: either light can calibrate
+  // either mode (it only fixes the pixel → nm axis). It follows the mode's usual
+  // pairing until the student picks one explicitly, then it stays put.
+  const [lightType, setLightType] = useState<ReferenceLight>(() =>
+    defaultLightForMode(EXPERIMENT_MODES[0].value),
+  );
+  const [lightPinned, setLightPinned] = useState(false);
   const [laser, setLaser] = useState<Record<string, string>>(() =>
     Object.fromEntries(LASER_CHANNELS.map((c) => [c.key, String(c.default)])),
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  // The reference light is paired one-to-one with the mode (absorbance →
-  // fluorescent lamp, fluorescence → lasers), so this form is a single choice;
-  // the light is derived from the mode (lightForMode).
-  const isLaser = lightForMode(mode) === "laser";
+  const isLaser = lightType === "laser";
   const peaksLabel = isLaser
     ? LASER_CHANNELS.map((c) => laser[c.key] || "?").join(" · ")
     : lightMeta("fluorescent").peaks.join(" · ");
+
+  function selectMode(v: ModeMeta["value"]) {
+    setMode(v);
+    if (!lightPinned) setLightType(defaultLightForMode(v));
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -94,7 +106,6 @@ export function NewExperimentForm() {
     if (!trimmed) return setError("Please name your experiment.");
     if (trimmed.length > 80) return setError("That name is a bit long — keep it under 80 characters.");
 
-    const lightType = lightForMode(mode);
     let laserWavelengths: number[] | undefined;
     if (lightType === "laser") {
       const { visibleMin, visibleMax } = SpectralConstants;
@@ -170,7 +181,7 @@ export function NewExperimentForm() {
         <div>
           <h2 className="text-sm font-semibold text-t1">Experiment mode</h2>
           <p className="text-xs text-t3">
-            This sets both the signal you measure and the light you calibrate against.
+            This sets the signal you measure — absorbed light, or emitted light.
           </p>
         </div>
         <div className="flex flex-col gap-3">
@@ -183,14 +194,40 @@ export function NewExperimentForm() {
               tagline={m.tagline}
               description={m.description}
               selected={mode === m.value}
-              onSelect={(v) => setMode(v as ModeMeta["value"])}
+              onSelect={(v) => selectMode(v as ModeMeta["value"])}
             />
           ))}
         </div>
       </section>
 
-      {/* Reference light is derived from the mode; only lasers need wavelengths. */}
+      {/* Calibration light — an independent choice, offered in both modes. */}
       <section className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-t1">Calibration light</h2>
+          <p className="text-xs text-t3">
+            What you&apos;ll photograph to turn pixels into wavelengths. Either light works in
+            either mode — {lightMeta(defaultLightForMode(mode)).label.toLowerCase()} is the usual
+            choice for {modeMeta(mode).label.toLowerCase()}.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3">
+          {REFERENCE_LIGHTS.map((l) => (
+            <OptionCard
+              key={l.value}
+              name="lightType"
+              value={l.value}
+              label={l.label}
+              tagline={l.tagline}
+              description={l.description}
+              selected={lightType === l.value}
+              onSelect={(v) => {
+                setLightType(v as ReferenceLight);
+                setLightPinned(true);
+              }}
+            />
+          ))}
+        </div>
+
         {isLaser && (
           <div className="flex flex-col gap-2 rounded-lg border border-line bg-panel-2 p-4">
             <p className="text-xs text-t3">

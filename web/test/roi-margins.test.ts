@@ -27,9 +27,9 @@ describe("requiredDarkMargin", () => {
 });
 
 describe("requiredCrossDarkMargin", () => {
-  it("is 15% per side for the laser (fluorescence) light and absent otherwise", () => {
-    expect(requiredCrossDarkMargin("laser")).toBeCloseTo(0.15);
-    expect(requiredCrossDarkMargin("fluorescent")).toBeNull();
+  it("is 15% per side in fluorescence mode and absent otherwise", () => {
+    expect(requiredCrossDarkMargin("fluorescence")).toBeCloseTo(0.15);
+    expect(requiredCrossDarkMargin("beerLambert")).toBeNull();
     expect(requiredCrossDarkMargin(undefined)).toBeNull();
   });
 });
@@ -61,7 +61,7 @@ describe("checkRoiMargins", () => {
   it("gates the cross axis at 15% per side in fluorescence mode", () => {
     // The cross-axis profile is the strip seen side-on: dark rows, the bright
     // body, dark rows. 25% dark per side passes; a box hugging one side fails.
-    const req = requiredCrossDarkMargin("laser")!;
+    const req = requiredCrossDarkMargin("fluorescence")!;
     expect(checkRoiMargins(plateau(100, 25, 74), req).ok).toBe(true);
     const hugging = checkRoiMargins(plateau(100, 5, 79), req);
     expect(hugging.ok).toBe(false);

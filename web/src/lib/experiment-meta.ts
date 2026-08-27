@@ -69,14 +69,14 @@ export const EXPERIMENT_MODES: ModeMeta[] = [
     label: "Absorption mode",
     tagline: "Find an unknown concentration from how much light it absorbs",
     description:
-      "Shine broadband light through your sample and compare how much it absorbs against known standards. Calibrated with a fluorescent lamp — its known emission lines set the wavelength scale.",
+      "Shine broadband light through your sample and compare how much it absorbs against known standards. Calibrate the wavelength scale with either a fluorescent lamp or R/G/B lasers.",
   },
   {
     value: "fluorescence",
     label: "Fluorescence mode",
     tagline: "Find an unknown concentration from how brightly it emits",
     description:
-      "Excite your sample and compare how brightly it emits against known standards. Calibrated with red/green/blue lasers — their known wavelengths set the wavelength scale.",
+      "Excite your sample and compare how brightly it emits against known standards. Calibrate the wavelength scale with either R/G/B lasers or a fluorescent lamp.",
   },
 ];
 
@@ -194,16 +194,15 @@ export function lightMeta(value: ReferenceLight): LightMeta {
 }
 
 /**
- * The reference (calibration) light each experiment mode uses. The two are
- * paired one-to-one (CLAUDE.md → Key Domain Concepts): absorbance shines a
- * broadband source through the sample and calibrates the wavelength axis against
- * a fluorescent lamp's known emission lines; fluorescence excites the sample
- * with lasers, whose known wavelengths double as the calibration. So the setup
- * form exposes a single choice (the mode) and derives the light from it —
- * `lightType` stays a stored field because the calibration code genuinely
- * branches on it, but it is no longer an independent user choice.
+ * The *suggested* reference (calibration) light for an experiment mode — the
+ * usual pairing, not a constraint: absorbance normally calibrates the wavelength
+ * axis against a fluorescent lamp's known emission lines, and fluorescence
+ * normally re-uses the excitation lasers, whose wavelengths are already known.
+ * Either light works in either mode (the calibration is just a pixel → nm fit,
+ * independent of the signal maths), so the setup form offers both and only uses
+ * this as the default selection for the chosen mode.
  */
-export function lightForMode(mode: ExperimentMode): ReferenceLight {
+export function defaultLightForMode(mode: ExperimentMode): ReferenceLight {
   return mode === "fluorescence" ? "laser" : "fluorescent";
 }
 
@@ -282,8 +281,8 @@ export interface StepGuidance {
  */
 export const STEP_GUIDANCE: Record<WorkflowStep, StepGuidance> = {
   experimentSetup: {
-    why: "A couple of choices set the lamp peaks, units and expected ranges for everything that follows.",
-    todo: "Name the experiment and pick a mode and reference light.",
+    why: "A couple of choices set the calibration peaks, units and expected ranges for everything that follows.",
+    todo: "Name the experiment, pick a mode, and choose the light you'll calibrate against.",
   },
   cameraRoiSetup: {
     why: "Every measurement must come from the exact same region of the strip, so they're all comparable. You need a photo to see where that region is — so we start with the lamp.",

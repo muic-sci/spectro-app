@@ -179,8 +179,8 @@ export async function suggestOrientation(
  * Check the ROI's dark margins — the drawn box must keep dark background on
  * BOTH ends of the spectrum along the dispersion axis (10% of its length for
  * the lamp, 20% for laser lines) or the band restriction loses its dark
- * context and a slightly-shifted capture can clip. In fluorescence (laser)
- * mode the box must ALSO keep dark background across the strip — 15% on each
+ * context and a slightly-shifted capture can clip. In fluorescence mode the
+ * box must ALSO keep dark background across the strip — 15% on each
  * side along the cross axis — assessed with the same band check on the
  * cross-axis profile. Decode is cached, so this is cheap to run live while
  * the student drags the box.
@@ -188,7 +188,7 @@ export async function suggestOrientation(
 export async function assessRoiMargins(
   url: string,
   roi: Rect | null,
-  opts: { vertical: boolean; lightType?: string; lineariseGamma?: boolean },
+  opts: { vertical: boolean; lightType?: string; mode?: string; lineariseGamma?: boolean },
 ): Promise<RoiMarginsAssessment> {
   const raster = await decodeFromUrl(url);
   // The editor's image is the lamp / laser composite → max-channel, like calibration.
@@ -199,7 +199,7 @@ export async function assessRoiMargins(
       lineariseGamma: opts.lineariseGamma ?? true,
     });
   const along = checkRoiMargins(extract(opts.vertical), requiredDarkMargin(opts.lightType));
-  const crossRequired = requiredCrossDarkMargin(opts.lightType);
+  const crossRequired = requiredCrossDarkMargin(opts.mode);
   const cross =
     crossRequired == null ? null : checkRoiMargins(extract(!opts.vertical), crossRequired);
   return { along, cross, ok: along.ok && (cross?.ok ?? true) };

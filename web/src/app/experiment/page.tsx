@@ -130,6 +130,7 @@ function WizardPageInner() {
             images={imageList}
             calibrationImageUrl={calImage?.url || null}
             lightType={experiment!.lightType}
+            mode={experiment!.mode}
             laserChannels={laserChannels}
             laserImages={laserImages}
           />

@@ -41,6 +41,7 @@ export function RoiBoxEditor({
   initialOrientation = "horizontal",
   initialLineariseGamma = true,
   lightType = "fluorescent",
+  mode = "beerLambert",
 }: {
   experimentId: string;
   /** Every stored image, so a ROI/orientation change re-extracts all of them. */
@@ -52,6 +53,8 @@ export function RoiBoxEditor({
   initialLineariseGamma?: boolean;
   /** "laser" → recompute calibration from the laser captures, not the composite. */
   lightType?: string;
+  /** Experiment mode — "fluorescence" adds the cross-axis dark-margin gate. */
+  mode?: string;
 }) {
   const reload = useWizardReload();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -65,7 +68,7 @@ export function RoiBoxEditor({
   // Live colour-gradient analysis of the current box → auto orientation + goodness.
   const [score, setScore] = useState<OrientationScore | null>(null);
   // Live dark-margin check of the current box: along the dispersion axis, plus
-  // across the strip in fluorescence (laser) mode.
+  // across the strip in fluorescence mode.
   const [margins, setMargins] = useState<RoiMarginsAssessment | null>(null);
   // While true, the orientation chip follows the detected axis as the box changes.
   const [auto, setAuto] = useState(true);
@@ -181,6 +184,7 @@ export function RoiBoxEditor({
       assessRoiMargins(imageUrl, roi, {
         vertical: orientation === "vertical",
         lightType,
+        mode,
         lineariseGamma: gamma,
       })
         .then((m) => {
@@ -194,7 +198,7 @@ export function RoiBoxEditor({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [box, natural, imageUrl, orientation, lightType, gamma]);
+  }, [box, natural, imageUrl, orientation, lightType, mode, gamma]);
 
   function startDrag(mode: Mode, e: React.PointerEvent) {
     if (!natural) return;

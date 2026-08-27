@@ -38,13 +38,14 @@ export function requiredDarkMargin(lightType?: string): number {
 
 /**
  * Required dark margin per SIDE of the strip along the cross axis
- * (perpendicular to dispersion), or null when no cross gate applies.
- * Fluorescence mode (laser light — the pairing is 1:1) measures a faint
- * emission band, so the box must also keep dark background above/below the
- * strip; the bright lamp of Beer-Lambert mode needs no cross gate.
+ * (perpendicular to dispersion), or null when no cross gate applies. Keyed on
+ * the experiment MODE, not the calibration light: fluorescence measures a faint
+ * emission band that can shift between shots, so the box must also keep dark
+ * background above/below the strip. Beer-Lambert's brightly-lit strip needs no
+ * cross gate whichever light calibrated the axis.
  */
-export function requiredCrossDarkMargin(lightType?: string): number | null {
-  return lightType === "laser" ? SpectralConstants.roiDarkMarginCross : null;
+export function requiredCrossDarkMargin(mode?: string): number | null {
+  return mode === "fluorescence" ? SpectralConstants.roiDarkMarginCross : null;
 }
 
 /**

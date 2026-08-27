@@ -144,11 +144,13 @@ MOMENT                    WHAT THE STUDENT SEES
 - **Elements:**
   - **Name** the experiment.
   - **Experiment mode** — Beer-Lambert quantitation or fluorescence. Each shows a one-line
-    description. **The mode also fixes the reference light** (`lightForMode`: Beer-Lambert →
-    fluorescent lamp; fluorescence → laser), so light type is *not* a separate question.
+    description. The mode sets only the *signal* that is measured.
+  - **Calibration light** — fluorescent lamp or R/G/B lasers, offered in **both** modes
+    (calibration is just the pixel→nm fit). `defaultLightForMode` seeds the selection with
+    the usual pairing (Beer-Lambert → lamp; fluorescence → lasers); an explicit pick sticks.
   - **Concentration unit** (µM / mg/L / %) — chosen **once** here and applied to every
     standard and unknown, so it is never re-typed per capture.
-  - In fluorescence mode: the **three laser wavelengths** (defaults 650 / 532 / 405 nm).
+  - With the laser light: the **three laser wavelengths** (defaults 650 / 532 / 405 nm).
   - Continue → straight into the wizard at L3.1.
 - **Layout intent:** form-light, explanatory. Each choice has a short *why it matters* note.
 - **States:** default; validation (name required); mode descriptions on hover/focus.
