@@ -1,6 +1,6 @@
 {
   "name": "spectro-web",
-  "version": "3.7.1",
+  "version": "3.7.2",
   "private": true,
   "description": "Spectro Web — a fully static, in-browser guide & analysis app for the Lego Spectrophotometer (absorption / fluorescence quantitation).",
   "engines": {
@@ -19,20 +19,20 @@
   "dependencies": {
     "@heroui/react": "^3.1.0",
     "framer-motion": "^12.40.0",
-    "next": "^16.2.11",
+    "next": "^16.3.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "recharts": "^3.8.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.0",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.10.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "eslint": "^9.18.0",
-    "eslint-config-next": "^16.2.6",
+    "eslint-config-next": "^16.3.4",
     "sharp": "^0.35.3",
-    "tailwindcss": "^4.3.0",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.23.12",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
