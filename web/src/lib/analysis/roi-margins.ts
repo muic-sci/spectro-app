@@ -8,9 +8,9 @@
  * reject margin impostors, edge lines lose their flanks (and prominence) at
  * the profile boundary, and a capture whose spectrum shifts slightly between
  * shots can fall off the box edge entirely. So the ROI editor requires a dark
- * margin on each end: 10% of the box length for broadband (lamp) spectra, 20%
- * for laser lines — narrow lines don't spread, so more dark context is needed
- * to prove the box isn't clipping.
+ * margin on each end: 10% of the box length, for both broadband (lamp) spectra
+ * and laser lines. The threshold is still keyed on the light, so the two can be
+ * tuned apart again if laser captures turn out to need more dark context.
  */
 import type { DataPoint } from "./types";
 import { SpectralConstants } from "./constants";

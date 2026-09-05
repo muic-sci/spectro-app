@@ -178,7 +178,7 @@ export async function suggestOrientation(
 /**
  * Check the ROI's dark margins — the drawn box must keep dark background on
  * BOTH ends of the spectrum along the dispersion axis (10% of its length for
- * the lamp, 20% for laser lines) or the band restriction loses its dark
+ * the lamp or laser lines) or the band restriction loses its dark
  * context and a slightly-shifted capture can clip. In fluorescence mode the
  * box must ALSO keep dark background across the strip — 15% on each
  * side along the cross axis — assessed with the same band check on the

@@ -358,7 +358,7 @@ export function RoiBoxEditor({
   const handle = "absolute h-3 w-3 -m-1.5 rounded-full border border-bg touch-none";
 
   // Dark-margin gate: enough dark background on each end of the spectrum
-  // (10% of the box length for the lamp, 20% for laser lines) — and, in
+  // (10% of the box length, lamp or laser lines) — and, in
   // fluorescence (laser) mode, on each side ACROSS the strip (15%) — or Save
   // is disabled and the box turns orange. Null = not assessed yet (don't block).
   const marginsOk = margins == null || margins.ok;

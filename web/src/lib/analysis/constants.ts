@@ -44,8 +44,8 @@ export const SpectralConstants = {
    * fraction of the box length along the dispersion axis (see roi-margins.ts).
    */
   roiDarkMarginLamp: 0.1,
-  /** Laser lines are narrow — require more dark context per end. */
-  roiDarkMarginLaser: 0.2,
+  /** Same 10% for laser lines; kept separate so it can be tuned per light. */
+  roiDarkMarginLaser: 0.1,
   /**
    * Fluorescence (laser) mode also requires dark background ACROSS the strip:
    * this fraction of the box on EACH side along the cross axis (perpendicular

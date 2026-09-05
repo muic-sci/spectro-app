@@ -19,10 +19,10 @@ function plateau(length: number, from: number, to: number, amp = 200, base = 2):
 }
 
 describe("requiredDarkMargin", () => {
-  it("is 10% for the lamp and 20% for lasers", () => {
+  it("is 10% per end for every light", () => {
     expect(requiredDarkMargin("fluorescent")).toBeCloseTo(0.1);
     expect(requiredDarkMargin(undefined)).toBeCloseTo(0.1);
-    expect(requiredDarkMargin("laser")).toBeCloseTo(0.2);
+    expect(requiredDarkMargin("laser")).toBeCloseTo(0.1);
   });
 });
 
@@ -51,11 +51,14 @@ describe("checkRoiMargins", () => {
     expect(m.tail).toBeGreaterThan(0.1);
   });
 
-  it("applies the stricter laser threshold", () => {
-    // ~13% dark on each end: enough for the lamp (10%), not for lasers (20%).
+  it("applies the same along-axis threshold to lamp and laser", () => {
+    // ~13% dark on each end: enough for either light at 10%.
     const p = plateau(200, 30, 169);
     expect(checkRoiMargins(p, requiredDarkMargin("fluorescent")).ok).toBe(true);
-    expect(checkRoiMargins(p, requiredDarkMargin("laser")).ok).toBe(false);
+    expect(checkRoiMargins(p, requiredDarkMargin("laser")).ok).toBe(true);
+    // ~8% per end clears neither.
+    const tight = plateau(200, 18, 181);
+    expect(checkRoiMargins(tight, requiredDarkMargin("laser")).ok).toBe(false);
   });
 
   it("gates the cross axis at 15% per side in fluorescence mode", () => {
