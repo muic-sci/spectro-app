@@ -7,6 +7,7 @@
 import type { AbsorbanceSeries } from "@/components/charts/absorbance-chart";
 import { CalibrationCurveChart } from "@/components/charts/calibration-curve-chart";
 import { SignalSpectraCard } from "@/components/wizard/signal-spectra-card";
+import { StripThumb } from "@/components/wizard/strip-thumb";
 import { CaptureControls } from "@/components/wizard/capture-controls";
 import { DeleteButton } from "@/components/wizard/delete-button";
 import { Icon, Readout, StatusChip } from "@/components/ui/primitives";
@@ -191,9 +192,12 @@ export function StandardsStep({
                 <tr key={s.id} className="border-t border-line-soft">
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      {s.imageUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element -- dynamic owner-scoped blob
-                        <img src={s.imageUrl} alt="" className="h-6 w-10 rounded border border-line object-cover" />
+                      {s.croppedImageUrl && (
+                        <StripThumb
+                          src={s.croppedImageUrl}
+                          orientation={orientation}
+                          ascending={!calibration || calibration.slope >= 0}
+                        />
                       )}
                       <span className="text-t2">#{i + 1}</span>
                     </div>
