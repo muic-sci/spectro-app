@@ -1,0 +1,90 @@
+# .github/workflows/deploy-pages.yml — the GitHub Pages mirror.
+#
+# The production site (spectro.muzoo.io) ships through GitLab CI + deployd on
+# vX.Y.Z tags (see .gitlab-ci.yml). This workflow publishes the SAME static
+# export to GitHub Pages at https://muic-sci.github.io/spectro-app/ on every
+# push to main (or by hand via "Run workflow"). It is the free, zero-infra
+# mirror: no Docker, no nginx — `next build` → out/ → actions/deploy-pages.
+#
+# Two build-time inputs differ from the Docker build:
+#   NEXT_PUBLIC_BASE_PATH   "/spectro-app", taken from actions/configure-pages,
+#                           so a project site under /<repo>/ resolves its links
+#                           and assets (it becomes "" automatically if a custom
+#                           domain is ever attached to the Pages site).
+#   NEXT_PUBLIC_APP_VERSION `git describe --tags` — vX.Y.Z on a release commit,
+#                           vX.Y.Z-N-g<sha> between releases — for the badge.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One Pages deploy at a time; let an in-flight one finish rather than cancel it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history + tags, for `git describe`
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v6
+        with:
+          enablement: true
+
+      - name: Version from git
+        id: version
+        run: echo "version=$(git describe --tags --always)" >> "$GITHUB_OUTPUT"
+
+      - run: npm ci
+
+      # The same gates the project requires before a commit.
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Build static export
+        run: npm run build
+        env:
+          NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          NEXT_PUBLIC_APP_VERSION: ${{ steps.version.outputs.version }}
+          NEXT_TELEMETRY_DISABLED: 1
+
+      # Pages deployed from Actions skips Jekyll anyway; this keeps _next/ safe
+      # should the source ever be switched to "deploy from a branch".
+      - run: touch out/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: web/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

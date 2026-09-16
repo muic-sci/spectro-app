@@ -22,6 +22,9 @@ spectro-app/
 │                 # copy at web/test/fixtures/spectro-002, not this folder.
 ├── paper/        # J. Chem. Educ. manuscript draft — tracked ONLY on branch `paper-draft`
 │                 # (never merged). On main only the gitignored paper/resources/ exists.
+├── .github/workflows/deploy-pages.yml
+│                 # GitHub Pages mirror: builds the same export on every push to main and
+│                 # publishes it at https://muic-sci.github.io/spectro-app/ (see Deploy)
 └── Dockerfile, docker-compose.prod.yml, .gitlab-ci.yml
                   # deployd: CI builds the static image on vX.Y.Z tags; deployd deploys it
 ```
@@ -97,6 +100,8 @@ A static export can't pre-render per-id dynamic routes (ids are created at runti
 - `/report?id=…` — the full report (`web/src/app/report/page.tsx`).
 - `/showcase` — the design-system page (internal, not in the student flow; it is the only remaining consumer of the `ConnBadge` primitive, a leftover from the two-device era).
 Pages that read `useSearchParams` are wrapped in `<Suspense>` (an export requirement).
+
+**Base path:** `next.config.ts` sets `basePath` from **`NEXT_PUBLIC_BASE_PATH`** — empty by default (Docker/nginx build, `npm run dev`), `/spectro-app` for the GitHub Pages build, where a project site lives under `/<repo>/`. Next prefixes every `<Link>`, `router.push` and `_next/` asset itself, so app code never sees it — which is why **every internal link must stay on `next/link`**: a raw `<a href="/…">`, `window.location` or absolute `fetch("/…")` would bypass the prefix and break the Pages mirror (there are none today; grep before adding one).
 
 A **`VersionBadge`** (`web/src/components/ui/version-badge.tsx`) is rendered once in the root layout, so a small build-version stamp sits bottom-right on every page (`no-print`). `APP_VERSION` = `NEXT_PUBLIC_APP_VERSION`, baked in at build time from the root `Dockerfile`'s `APP_VERSION` build arg (CI passes the git tag); local builds show `dev`. A deployed page reading `dev` means the build arg was lost.
 
@@ -209,6 +214,9 @@ npm run typecheck  # tsc --noEmit
 npm run build      # static export → out/
 npm run preview    # serve the built out/ locally (npx serve out)
 
+# the GitHub Pages build — same export, served from a sub-path (see Deploy):
+NEXT_PUBLIC_BASE_PATH=/spectro-app npm run build
+
 # offline re-analysis of an exported bundle (Node + sharp, no browser):
 npm run analyze -- ../paper/resources/experiments/*.spectro.zip \
   --out ../paper/resources/experiments/analysis --source original
@@ -217,6 +225,12 @@ There is no database, no `.env` to configure, and no auth. Data lives in the bro
 
 ### Deploy (deployd) — tag → GitLab CI → deployd → traefik
 Managed by **deployd** (the single-VM deploy controller; app slug `spectro-app`, domain **spectro.muzoo.io**). Push a `vX.Y.Z` tag → the self-contained `build-and-push` job in `.gitlab-ci.yml` builds the root `Dockerfile` (context = repo root, `APP_VERSION=$CI_COMMIT_TAG` build-arg) and pushes `:vX.Y.Z` + `:latest` (latest = layer cache only) to the GitLab registry → the deployd-managed project webhook fires → deployd verifies tag + green pipeline + registry image via the GitLab API, then pulls `docker-compose.prod.yml` at that tag and deploys it in the **injected-variable style**: the compose file itself pins `image: …/spectro-app:${DEPLOYD_TAG}` (deployd's generated `.deployd.env` supplies `DEPLOYD_TAG` etc.; needs deployd ≥ v0.6.1) and the generated override only routes the domain (traefik) to **:80** in the container (nginx serving the static export). No `${DEPLOYD_DATA_DIR}` mounts — the app has no persistent data. The image is a **multi-stage static build**: `node` builds the export, then **nginx** (`web/nginx.conf`) serves `out/`. **No database, no migrations, no persistent volume, no env** — `docker-compose.prod.yml` is a single `app` service with no ports/labels (deployd's override handles routing). The old webhook-deploy plumbing (`docker/` + HMAC webhook CI job + `DEPLOY_WEBHOOK_*` vars) and the shared CI include (`muzoo/deployd` → `ci/deployd-build.gitlab-ci.yml`) are both retired.
+
+### GitHub Pages mirror — push to main → GitHub Actions → Pages
+The repo is **also on GitHub** — `git@github.com:muic-sci/spectro-app.git` (public; local remote **`github`**, `origin` stays GitLab) — where `.github/workflows/deploy-pages.yml` publishes the **same static export** at **https://muic-sci.github.io/spectro-app/**: the free, zero-infra mirror (no Docker, no nginx — `next build` → `out/` → `actions/deploy-pages`). It runs on **every push to `main`** (and by hand via *Run workflow*), gated by `typecheck` + `test` before the build, concurrency-grouped so deploys never overlap. Pages was enabled with source **GitHub Actions** through the API (`gh api -X POST repos/muic-sci/spectro-app/pages -f build_type=workflow`) — nothing to configure in the repo settings. Two build inputs differ from the Docker build:
+- **`NEXT_PUBLIC_BASE_PATH`** = `/spectro-app`, taken from `actions/configure-pages` (it becomes `""` automatically if a custom domain is ever attached to the Pages site) → `basePath` in `next.config.ts` (see *Routing → Base path*).
+- **`NEXT_PUBLIC_APP_VERSION`** = `git describe --tags --always` — `vX.Y.Z` on a release commit, `vX.Y.Z-N-g<sha>` between releases — so the `VersionBadge` shows what the mirror is running (the workflow checks out with full history for this).
+On a release push `main` and the tag to **both** remotes (`docs/deploy-checklist.html` §3 has the command); the GitHub push is what redeploys the mirror. Only `main` (+ tags) goes to GitHub — **`paper-draft` never does** (unpublished manuscript). The GitHub history was scanned before the first push (gitleaks over every commit + a personal-data/EXIF pass): clean.
 
 ## Git Commit Convention
 All commits follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>[scope]: <short description>` + optional bullet body.

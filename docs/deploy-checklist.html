@@ -67,7 +67,7 @@
 <body>
 <main>
   <header><div class="mark"></div><h1>Spectro Web — Deployment Checklist</h1></header>
-  <p class="sub">Fully static site shipped via <b>deployd</b>: tag&nbsp;→&nbsp;GitLab&nbsp;CI&nbsp;→&nbsp;deployd&nbsp;→&nbsp;traefik. No database, no env, no persistent data. Your ticks are saved in this browser.</p>
+  <p class="sub">Fully static site shipped via <b>deployd</b>: tag&nbsp;→&nbsp;GitLab&nbsp;CI&nbsp;→&nbsp;deployd&nbsp;→&nbsp;traefik. No database, no env, no persistent data. A free mirror of the same export also deploys to <b>GitHub Pages</b> on every push to <code>main</code>. Your ticks are saved in this browser.</p>
 
   <div class="bar"><i id="barFill"></i></div>
   <p class="progress-label" id="progressLabel">0 of 0 done</p>
@@ -82,6 +82,8 @@
 const APP = "spectro-app";
 const DOMAIN = "spectro.muzoo.io";
 const VM = "mabelz";   // ssh alias of the deployd VM
+const GITHUB = "muic-sci/spectro-app";                       // public mirror + GitHub Pages
+const PAGES_URL = "https://muic-sci.github.io/spectro-app/";
 
 const DATA = [
   {
@@ -114,6 +116,8 @@ const DATA = [
       { t: "Register the app in deployd", d: "Slug + repo + domain + app_port 80 (nginx in the container). No data mounts — the app has no persistent state." },
       { t: "Give deployd a GitLab token with API + registry read", d: "deployd stores its OWN per-app copy of this token. Note the expiry: when it lapses, webhook pokes fail SILENTLY (no deploy row appears) and manual deploys 401. Fixing it is admin-only in the deployd UI (app → settings)." },
       { t: "Let deployd create the project webhook", d: "Do not hand-create one — deployd manages it." },
+      { t: "GitHub Pages mirror (done 2026-09-16)", d: "The repo is also on GitHub (" + GITHUB + ", public; local remote `github`, origin stays GitLab). .github/workflows/deploy-pages.yml builds the same static export with NEXT_PUBLIC_BASE_PATH=/spectro-app and publishes it at " + PAGES_URL + " on every push to main. Pages source = GitHub Actions, enabled via the API — nothing to click in the repo settings. Only main + tags go to GitHub; paper-draft never does.",
+        cmd: "git remote add github git@github.com:" + GITHUB + ".git\ngh api -X POST repos/" + GITHUB + "/pages -f build_type=workflow" },
     ],
   },
   {
@@ -122,12 +126,12 @@ const DATA = [
     hint: "The whole release is one tag push. Run the gates first — per the project conventions, typecheck + tests must pass, plus a build for build-affecting changes and a CVE scan before committing.",
     items: [
       { t: "Run the pre-commit gates", cmd: "cd web && npm run typecheck && npm test && npm run build" },
-      { t: "Run the CVE scan", d: "Two findings are known and ACCEPTED (next-internal pins: postcss@8.4.31 and a nested optional sharp) — do not try to 'fix' them.",
+      { t: "Run the CVE scan", d: "Clean (0 HIGH/CRITICAL) since next 16.3.4 / v3.7.2. If next-internal pins go vulnerable again, wait for (or take) the upstream next release — never npm overrides; nothing in that layer ships anyway (nginx serves static out/).",
         cmd: "trivy fs --scanners vuln --severity HIGH,CRITICAL web" },
-      { t: "Bump web/package.json version + commit", d: "Convention: chore(release): vX.Y.Z. Keep CLAUDE.md updated in the same commit when architecture or domain knowledge changed.",
-        cmd: "git add -A && git commit -m 'chore(release): vX.Y.Z'" },
-      { t: "Push main, then the tag", d: "The tag is what triggers everything: CI builds + pushes the image, deployd's webhook fires, deployd verifies tag + green pipeline + registry image, then deploys.",
-        cmd: "git push origin main\ngit tag vX.Y.Z\ngit push origin vX.Y.Z" },
+      { t: "Bump web/package.json version", d: "Amend the bump into the last local (unpushed) commit rather than adding a separate chore(release) commit; only add a standalone chore(release): vX.Y.Z commit when everything being released is already pushed. Keep CLAUDE.md updated in the same commit when architecture or domain knowledge changed.",
+        cmd: "git add web/package.json && git commit --amend --no-edit" },
+      { t: "Push main + the tag to BOTH remotes", d: "The GitLab tag is what triggers production: CI builds + pushes the image, deployd's webhook fires, deployd verifies tag + green pipeline + registry image, then deploys. The GitHub push of main redeploys the Pages mirror (the tag is only there so the badge reads vX.Y.Z).",
+        cmd: "git push origin main && git push github main\ngit tag vX.Y.Z\ngit push origin vX.Y.Z && git push github vX.Y.Z" },
       { t: "Watch the pipeline go green", d: "deployd will not deploy a tag whose pipeline is not green — it verifies via the GitLab API." },
       { t: "Confirm deployd created a deploy row", d: "No row at all usually means the webhook poke failed — most often deployd's stored GitLab token has expired (see §2)." },
     ],
@@ -143,6 +147,8 @@ const DATA = [
         cmd: "ssh " + VM + " \"docker inspect " + APP + "-app-1 --format '{{.Config.Image}}'\"" },
       { t: "Load the site over HTTPS", cmd: "curl -sI https://" + DOMAIN + "/ | head -1" },
       { t: "Check the version badge matches the tag", d: "Bottom-right corner of any page. 'dev' means APP_VERSION never reached the build." },
+      { t: "Check the GitHub Pages mirror", d: "The Deploy to GitHub Pages run must be green and " + PAGES_URL + " must load with the same badge. A vX.Y.Z-N-g… badge means main is ahead of the tag (fine); 'dev' means the version step broke.",
+        cmd: "gh run list -R " + GITHUB + " -w deploy-pages.yml -L 1\ncurl -sI " + PAGES_URL + " | head -1" },
       { t: "Smoke-test the actual workflow in a real browser", d: "The one thing no test covers: IndexedDB + the file picker. Create an experiment → upload the lamp → calibrate → blank → standards → unknown → report → export .spectro.zip → re-import it." },
       { t: "If Cloudflare shows 526", d: "That is traefik serving its default cert — almost always an unhealthy container (see the first item), not a certificate problem. Cloudflare masks the origin, so external probes cannot tell DNS, traefik and app failures apart; check on the VM." },
     ],
@@ -160,7 +166,7 @@ const DATA = [
   },
 ];
 
-const KEY = "spectro-deploy-checklist-v2";
+const KEY = "spectro-deploy-checklist-v3";   // v3: items were inserted (ticks are index-keyed)
 const state = JSON.parse(localStorage.getItem(KEY) || "{}");
 
 function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
