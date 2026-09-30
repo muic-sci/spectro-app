@@ -28,16 +28,18 @@ export const SpectralConstants = {
    */
   calibrationSmoothingWindow: 15,
 
-  /** A pixel is saturated when any channel is at/above this 8-bit value. */
-  saturationThreshold: 250,
-
   /**
-   * Stricter threshold for the BLANK capture (I₀). Phone tone mapping rolls
-   * highlights off below 255, so a blank can be effectively clipped without any
-   * pixel reaching 250 — and a clipped I₀ corrupts every absorbance computed
-   * from it. Flag the blank while it still has headroom.
+   * A pixel is saturated when any channel is at/above this 8-bit value.
+   *
+   * 230, not 250: phone tone mapping rolls highlights off below 255, so a
+   * capture can be effectively clipped — its intensities no longer proportional
+   * to photon count — without a single pixel reaching 250. This was originally
+   * the blank's (I₀) stricter threshold, but the argument is the same for every
+   * capture: A = −log₁₀(I/I₀) needs BOTH terms in the linear regime, so a
+   * standard sitting in the compressed shoulder is biased just like a clipped
+   * blank. One threshold now covers every role.
    */
-  saturationThresholdBlank: 230,
+  saturationThreshold: 230,
 
   /**
    * Required dark margin on each end of the spectrum inside the ROI, as a

@@ -13,6 +13,7 @@ import {
   findLocalMaxima,
   determineConcentration,
   pixelToWavelength,
+  saturationThresholdForRole,
   DEFAULT_ROI,
   SpectralConstants,
   type RasterImage,
@@ -84,24 +85,27 @@ describe("saturation check", () => {
     data: new Uint8ClampedArray(4 * 2 * 3).fill(v),
   });
 
-  it("default threshold flags only pixels at/above 250", () => {
-    expect(checkSaturation(flat(249), DEFAULT_ROI).isSaturated).toBe(false);
-    const sat = checkSaturation(flat(250), DEFAULT_ROI);
+  it("flags pixels at/above the single 230 threshold", () => {
+    expect(SpectralConstants.saturationThreshold).toBe(230);
+    expect(checkSaturation(flat(229), DEFAULT_ROI).isSaturated).toBe(false);
+    const sat = checkSaturation(flat(230), DEFAULT_ROI);
     expect(sat.isSaturated).toBe(true);
     expect(sat.fraction).toBe(1);
+    expect(sat.threshold).toBe(230);
   });
 
-  it("blank threshold (230) catches tone-mapped near-clipping the default misses", () => {
-    // Phone tone mapping rolls highlights off below 255 — a blank (I₀) can be
+  it("catches tone-mapped near-clipping that a 250 cut would miss", () => {
+    // Phone tone mapping rolls highlights off below 255 — a capture can be
     // effectively clipped at ~240 without a single pixel reaching 250.
-    expect(SpectralConstants.saturationThresholdBlank).toBe(230);
     const img = flat(240);
-    expect(checkSaturation(img, DEFAULT_ROI).isSaturated).toBe(false);
-    const strict = checkSaturation(img, DEFAULT_ROI, SpectralConstants.saturationThresholdBlank);
-    expect(strict.isSaturated).toBe(true);
-    expect(strict.fraction).toBe(1);
-    expect(strict.threshold).toBe(230);
-    expect(checkSaturation(flat(229), DEFAULT_ROI, 230).isSaturated).toBe(false);
+    expect(checkSaturation(img, DEFAULT_ROI).isSaturated).toBe(true);
+    expect(checkSaturation(img, DEFAULT_ROI, 250).isSaturated).toBe(false);
+  });
+
+  it("applies the same threshold to every role", () => {
+    for (const role of ["calibration", "laser", "blank", "standard", "unknown"]) {
+      expect(saturationThresholdForRole(role)).toBe(230);
+    }
   });
 });
 

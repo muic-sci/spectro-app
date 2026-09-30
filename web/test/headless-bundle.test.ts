@@ -150,9 +150,9 @@ describe("headless bundle analysis", () => {
     expect(r.derived.curve!.rSquared).toBeGreaterThan(0.99);
     expect(r.derived.unknowns[0].concentration).toBeGreaterThan(0);
 
-    // The blank gets the stricter near-saturation threshold, per role.
+    // Every role shares the same near-saturation threshold.
     expect(r.images.find((i) => i.role === "blank")!.saturation!.threshold).toBe(230);
-    expect(r.images.find((i) => i.role === "calibration")!.saturation!.threshold).toBe(250);
+    expect(r.images.find((i) => i.role === "calibration")!.saturation!.threshold).toBe(230);
   });
 
   it("emits the app's results CSV plus a raw-profile table", async () => {

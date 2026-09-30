@@ -30,12 +30,13 @@ export function maxChannelForRole(role: string): boolean {
 }
 
 /**
- * Saturation threshold for a role, or undefined for the default (250). The
- * blank is I₀ — clipping there corrupts every absorbance, and phone tone
- * mapping rolls highlights off below 255, so it gets the stricter 230.
+ * Saturation threshold for a role. Every role currently shares the same 230 —
+ * the blank's old stricter value, generalised (see `saturationThreshold`) —
+ * but this stays the one place to differentiate per role again if a capture
+ * type ever needs its own headroom.
  */
-export function saturationThresholdForRole(role: string): number | undefined {
-  return role === "blank" ? SpectralConstants.saturationThresholdBlank : undefined;
+export function saturationThresholdForRole(_role: string): number {
+  return SpectralConstants.saturationThreshold;
 }
 
 export interface RoleExtractOptions {

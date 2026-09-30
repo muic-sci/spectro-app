@@ -125,8 +125,9 @@ export function extractIntensityProfile(
 
 /**
  * Counts saturated pixels within the ROI. A pixel is saturated when any R/G/B
- * channel is at/above `threshold` (default 250, just below 255 to catch JPEG
- * artefacts near white). Saturation clips the sensor and makes absorbance read
+ * channel is at/above `threshold` (default `SpectralConstants.saturationThreshold`
+ * = 230, well below 255 because phone tone mapping compresses highlights before
+ * they clip). Saturation clips the sensor and makes absorbance read
  * artificially low.
  */
 export function checkSaturation(
