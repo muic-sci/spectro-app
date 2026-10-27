@@ -7,13 +7,13 @@
 # entirely in the browser. The runtime image is just nginx serving those files.
 
 # ── Stage 1: install dependencies ────────────────────────────────────────────
-FROM node:22-slim AS deps
+FROM node:24-slim AS deps
 WORKDIR /app
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 
 # ── Stage 2: build the static export ─────────────────────────────────────────
-FROM node:22-slim AS builder
+FROM node:24-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY web/ .
