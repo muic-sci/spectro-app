@@ -26,7 +26,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build   # → /app/out
 
 # ── Stage 3: runtime (static nginx) ──────────────────────────────────────────
-FROM nginx:1.27-alpine AS runner
+FROM nginx:1.30-alpine AS runner
 COPY web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/out /usr/share/nginx/html
 
