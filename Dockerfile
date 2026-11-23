@@ -27,6 +27,14 @@ RUN npm run build   # → /app/out
 
 # ── Stage 3: runtime (static nginx) ──────────────────────────────────────────
 FROM nginx:1.30-alpine AS runner
+
+# Pull Alpine security fixes that landed after the base image was built (e.g.
+# libxml2 2.13.9-r3 for CVE-2026-86144). APP_VERSION is declared here only so a
+# new release tag busts the cache: CI builds with --cache-from :latest, and
+# without it this layer would be reused and never pick up newer fixes.
+ARG APP_VERSION=dev
+RUN apk upgrade --no-cache
+
 COPY web/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/out /usr/share/nginx/html
 
